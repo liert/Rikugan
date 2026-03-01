@@ -1,0 +1,105 @@
+"""Tool registry: discovers, stores, and dispatches tool calls."""
+
+from __future__ import annotations
+
+import json
+from typing import Any, Callable, Dict, List, Optional
+
+from ..core.errors import ToolError, ToolNotFoundError, ToolValidationError
+from ..core.logging import log_debug, log_error
+from ..constants import TOOL_RESULT_TRUNCATE_LEN
+from .base import ToolDefinition
+
+# Eagerly import all tool modules at module level so that every `from`
+# import goes through CPython's real __import__ during the Shiboken bypass
+# window in iris_plugin._toggle_panel().  Previously these were lazily
+# loaded inside create_default_registry(), which ran *after* the bypass
+# was deactivated — causing imports through Shiboken's hook.
+from . import (  # noqa: F401
+    navigation, functions, strings, database,
+    disassembly, decompiler, xrefs, annotations,
+    types_tools, scripting, microcode,
+)
+
+_TOOL_MODULES = (
+    navigation, functions, strings, database,
+    disassembly, decompiler, xrefs, annotations,
+    types_tools, scripting, microcode,
+)
+
+
+class ToolRegistry:
+    """Central registry of all available tools."""
+
+    def __init__(self) -> None:
+        self._tools: Dict[str, ToolDefinition] = {}
+
+    def register(self, defn: ToolDefinition) -> None:
+        self._tools[defn.name] = defn
+        log_debug(f"Registered tool: {defn.name}")
+
+    def register_function(self, func: Callable[..., Any]) -> None:
+        defn = getattr(func, "_tool_definition", None)
+        if defn is None:
+            raise ValueError(f"{func.__name__} is not decorated with @tool")
+        self.register(defn)
+
+    def register_module(self, module: Any) -> None:
+        """Register all @tool-decorated functions in a module."""
+        for name in dir(module):
+            obj = getattr(module, name)
+            if callable(obj) and isinstance(getattr(obj, "_tool_definition", None), ToolDefinition):
+                self.register(obj._tool_definition)
+
+    def get(self, name: str) -> Optional[ToolDefinition]:
+        return self._tools.get(name)
+
+    def list_tools(self) -> List[ToolDefinition]:
+        return list(self._tools.values())
+
+    def list_names(self) -> List[str]:
+        return list(self._tools.keys())
+
+    def to_provider_format(self) -> List[Dict[str, Any]]:
+        return [t.to_provider_format() for t in self._tools.values()]
+
+    def execute(self, name: str, arguments: Dict[str, Any]) -> str:
+        defn = self._tools.get(name)
+        if defn is None:
+            raise ToolNotFoundError(f"Unknown tool: {name}", tool_name=name)
+        if defn.handler is None:
+            raise ToolError(f"Tool {name} has no handler", tool_name=name)
+
+        try:
+            result = defn.handler(**arguments)
+        except (ToolError, ToolValidationError):
+            raise
+        except TypeError as e:
+            raise ToolValidationError(
+                f"Invalid arguments for {name}: {e}", tool_name=name
+            ) from e
+        except Exception as e:
+            raise ToolError(f"Tool {name} failed: {e}", tool_name=name) from e
+
+        result_str = self._format_result(result)
+        if len(result_str) > TOOL_RESULT_TRUNCATE_LEN:
+            result_str = result_str[:TOOL_RESULT_TRUNCATE_LEN] + "\n... (truncated)"
+        return result_str
+
+    @staticmethod
+    def _format_result(result: Any) -> str:
+        if result is None:
+            return "OK"
+        if isinstance(result, str):
+            return result
+        if isinstance(result, (dict, list)):
+            return json.dumps(result, indent=2, default=str)
+        return str(result)
+
+
+def create_default_registry() -> ToolRegistry:
+    """Create a registry with all built-in tools."""
+    registry = ToolRegistry()
+    for mod in _TOOL_MODULES:
+        registry.register_module(mod)
+    return registry
