@@ -19,6 +19,23 @@ from .system_prompt import build_system_prompt
 from .turn import TurnEvent, TurnEventType
 from ..state.session import SessionState
 
+_PLAN_GENERATION_PROMPT = (
+    "You are in PLAN MODE. Analyze the user's request and create a numbered "
+    "step-by-step plan. Output ONLY the plan as a numbered list, one step per "
+    "line. Do NOT execute any tools. Do NOT include commentary before or after "
+    "the plan. Example format:\n"
+    "1. Decompile function at 0x401000\n"
+    "2. Identify string references\n"
+    "3. Rename variables based on analysis\n"
+)
+
+_STEP_EXECUTION_PROMPT = (
+    "You are executing step {index} of a plan.\n"
+    "Step: {description}\n\n"
+    "Execute this step using the available tools. When done, provide a brief "
+    "summary of what you accomplished."
+)
+
 
 class AgentLoop:
     """The core agentic loop: stream LLM -> execute tools -> repeat.
@@ -43,7 +60,11 @@ class AgentLoop:
         self._cancelled = threading.Event()
         self._running = False
         self._consecutive_errors = 0
+        self._tools_disabled_for_turn = False
         self._event_queue: queue.Queue[TurnEvent] = queue.Queue()
+        self._user_answer_event = threading.Event()
+        self._user_answer: Optional[str] = None
+        self.plan_mode = False
 
     @property
     def is_running(self) -> bool:
@@ -52,6 +73,11 @@ class AgentLoop:
     def cancel(self) -> None:
         """Cancel the current run."""
         self._cancelled.set()
+
+    def submit_user_answer(self, answer: str) -> None:
+        """Submit an answer to an ask_user question (called from UI thread)."""
+        self._user_answer = answer
+        self._user_answer_event.set()
 
     def _check_cancelled(self) -> None:
         if self._cancelled.is_set():
@@ -85,19 +111,142 @@ class AgentLoop:
             skill_summary=skill_summary,
         )
 
-    def _resolve_skill(self, user_message: str) -> str:
-        """Rewrite user message if it starts with a /skill slug."""
+    def _resolve_skill(self, user_message: str) -> tuple:
+        """Rewrite user message if it starts with a /skill slug.
+
+        Returns (rewritten_message, skill_or_None).
+        """
         if not self.skills:
-            return user_message
+            return (user_message, None)
         skill, remaining = self.skills.resolve_skill_invocation(user_message)
         if skill is None:
-            return user_message
+            return (user_message, None)
         log_debug(f"AgentLoop: skill invocation /{skill.slug}")
-        return (
+        rewritten = (
             f"[Skill: {skill.name}]\n"
             f"{skill.body}\n\n"
             f"User request: {remaining}"
         )
+        return (rewritten, skill)
+
+    @staticmethod
+    def _parse_plan(text: str) -> List[str]:
+        """Parse a numbered plan from LLM text into step strings."""
+        import re
+        steps = []
+        for line in text.strip().splitlines():
+            line = line.strip()
+            m = re.match(r"^\d+[.)]\s+(.+)", line)
+            if m:
+                steps.append(m.group(1).strip())
+        return steps
+
+    def _execute_step(
+        self,
+        step_index: int,
+        step_desc: str,
+        system_prompt: str,
+        tools_schema: List,
+    ) -> Generator[TurnEvent, None, None]:
+        """Execute a single plan step using a mini agent loop."""
+        yield TurnEvent.plan_step_start(step_index, step_desc)
+
+        step_prompt = _STEP_EXECUTION_PROMPT.format(
+            index=step_index + 1, description=step_desc,
+        )
+        step_msg = Message(role=Role.USER, content=step_prompt)
+        self.session.add_message(step_msg)
+
+        max_step_turns = 20
+        for _st in range(max_step_turns):
+            self._check_cancelled()
+            yield TurnEvent.turn_start(_st + 1)
+
+            try:
+                assistant_text, tool_calls, last_usage = yield from self._stream_llm_turn(
+                    system_prompt, tools_schema,
+                )
+            except CancellationError:
+                yield TurnEvent.cancelled_event()
+                return
+            except ProviderError as e:
+                yield TurnEvent.error_event(str(e))
+                return
+
+            if assistant_text:
+                yield TurnEvent.text_done(assistant_text)
+
+            assistant_msg = Message(
+                role=Role.ASSISTANT, content=assistant_text,
+                tool_calls=tool_calls, token_usage=last_usage,
+            )
+            self.session.add_message(assistant_msg)
+
+            if not tool_calls:
+                yield TurnEvent.turn_end(_st + 1)
+                break
+
+            tool_results: List[ToolResult] = yield from self._execute_tool_calls(tool_calls)
+            tool_msg = Message(role=Role.TOOL, tool_results=tool_results)
+            self.session.add_message(tool_msg)
+            yield TurnEvent.turn_end(_st + 1)
+
+        yield TurnEvent.plan_step_done(step_index, "completed")
+
+    def _run_plan_mode(
+        self,
+        user_message: str,
+        system_prompt: str,
+        tools_schema: List,
+    ) -> Generator[TurnEvent, None, None]:
+        """Run the agent in plan mode: generate plan, get approval, execute steps."""
+        # Phase 1: Generate plan (text-only)
+        plan_prompt = _PLAN_GENERATION_PROMPT + f"\n\nUser request: {user_message}"
+        plan_msg = Message(role=Role.USER, content=plan_prompt)
+        self.session.add_message(plan_msg)
+
+        yield TurnEvent.turn_start(1)
+        try:
+            plan_text, _, usage = yield from self._stream_llm_turn(system_prompt, None)
+        except (CancellationError, ProviderError) as e:
+            yield TurnEvent.error_event(str(e))
+            return
+
+        if plan_text:
+            yield TurnEvent.text_done(plan_text)
+
+        plan_msg_resp = Message(role=Role.ASSISTANT, content=plan_text, token_usage=usage)
+        self.session.add_message(plan_msg_resp)
+        yield TurnEvent.turn_end(1)
+
+        steps = self._parse_plan(plan_text)
+        if not steps:
+            yield TurnEvent.error_event("Failed to generate a valid plan.")
+            return
+
+        yield TurnEvent.plan_generated(steps)
+
+        # Phase 2: Get user approval via ask_user mechanism
+        yield TurnEvent.user_question(
+            "Do you want to execute this plan?",
+            ["Approve", "Reject"],
+            "__plan_approval__",
+        )
+
+        self._user_answer_event.clear()
+        self._user_answer = None
+        while not self._user_answer_event.wait(0.5):
+            self._check_cancelled()
+
+        answer = (self._user_answer or "").strip().lower()
+        if answer not in ("approve", "1", "yes", "y"):
+            yield TurnEvent.error_event("Plan rejected by user.")
+            return
+
+        # Phase 3: Execute each step
+        for i, step_desc in enumerate(steps):
+            self._check_cancelled()
+            yield from self._execute_step(i, step_desc, system_prompt, tools_schema)
 
     def _stream_llm_turn(
         self, system_prompt: str, tools_schema: Optional[List],
@@ -163,6 +312,26 @@ class AgentLoop:
         for tc in tool_calls:
             self._check_cancelled()
 
+            # ask_user: block until the UI delivers an answer
+            if tc.name == "ask_user":
+                question = tc.arguments.get("question", "")
+                options = tc.arguments.get("options", [])
+                yield TurnEvent.user_question(question, options, tc.id)
+
+                self._user_answer_event.clear()
+                self._user_answer = None
+                while not self._user_answer_event.wait(0.5):
+                    self._check_cancelled()
+
+                answer = self._user_answer or ""
+                tr = ToolResult(
+                    tool_call_id=tc.id, name=tc.name,
+                    content=f"User answered: {answer}", is_error=False,
+                )
+                tool_results.append(tr)
+                yield TurnEvent.tool_result_event(tc.id, tc.name, tr.content, False)
+                continue
+
             log_debug(f"Executing tool {tc.name}")
             try:
                 result = self.tools.execute(tc.name, tc.arguments)
@@ -199,14 +368,64 @@ class AgentLoop:
         self.session.is_running = True
 
         try:
-            user_message = self._resolve_skill(user_message)
+            # Detect /plan prefix before skill resolution
+            use_plan_mode = False
+            stripped = user_message.strip()
+            if stripped.lower().startswith("/plan "):
+                use_plan_mode = True
+                user_message = stripped[6:].strip()
+
+            user_message, active_skill = self._resolve_skill(user_message)
 
             user_msg = Message(role=Role.USER, content=user_message)
             self.session.add_message(user_msg)
 
             system_prompt = self._build_system_prompt()
             tools_schema = self.tools.to_provider_format()
+
+            # If active skill has allowed_tools, filter to only those
+            if active_skill and active_skill.allowed_tools:
+                allowed = set(active_skill.allowed_tools)
+                tools_schema = [
+                    t for t in tools_schema
+                    if t.get("function", {}).get("name") in allowed
+                ]
+
+            # Append the ask_user pseudo-tool so the LLM can ask the user
+            _ASK_USER_SCHEMA = {
+                "type": "function",
+                "function": {
+                    "name": "ask_user",
+                    "description": (
+                        "Ask the user a question and wait for their answer. "
+                        "Use this when you need clarification, confirmation, "
+                        "or a choice from the user before proceeding."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "question": {
+                                "type": "string",
+                                "description": "The question to ask the user.",
+                            },
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Optional list of choices for the user.",
+                            },
+                        },
+                        "required": ["question"],
+                    },
+                },
+            }
+            tools_schema.append(_ASK_USER_SCHEMA)
+
             log_debug(f"Agent run started: {len(tools_schema)} tools, msg={user_message[:80]!r}")
+
+            # Plan mode: generate plan → approval → step-by-step execution
+            if use_plan_mode or self.plan_mode:
+                yield from self._run_plan_mode(user_message, system_prompt, tools_schema)
+                return
 
             max_turns = 100
             turn = 0
@@ -225,12 +444,17 @@ class AgentLoop:
                 tool_calls: List[ToolCall] = []
                 last_usage: Optional[TokenUsage] = None
 
+                # If tools were disabled due to consecutive errors, run
+                # text-only so the agent is forced to explain the problem.
+                turn_tools = None if self._tools_disabled_for_turn else tools_schema
+                self._tools_disabled_for_turn = False
+
                 try:
                     # yield from propagates streamed TurnEvents to the caller
                     # while the generator's return value (via StopIteration.value)
                     # provides the accumulated result tuple (PEP 380).
                     assistant_text, tool_calls, last_usage = yield from self._stream_llm_turn(
-                        system_prompt, tools_schema,
+                        system_prompt, turn_tools,
                     )
                 except CancellationError:
                     yield TurnEvent.cancelled_event()
@@ -254,6 +478,7 @@ class AgentLoop:
 
                 # If no tool calls, we're done
                 if not tool_calls:
+                    self._consecutive_errors = 0
                     log_debug(f"Turn {turn} end (final)")
                     yield TurnEvent.turn_end(turn)
                     break
@@ -265,13 +490,21 @@ class AgentLoop:
                 tool_msg = Message(role=Role.TOOL, tool_results=tool_results)
                 self.session.add_message(tool_msg)
 
-                # Consecutive error safety: inject hint at 3, stop at 5
+                # Consecutive error recovery: hint at 3, force text-only at 5
                 if self._consecutive_errors >= 5:
-                    yield TurnEvent.error_event(
-                        "Stopped: 5 consecutive tool errors. Try a different approach."
+                    self._tools_disabled_for_turn = True
+                    self._consecutive_errors = 0
+                    hint = Message(
+                        role=Role.USER,
+                        content=(
+                            "[SYSTEM] You have failed 5 consecutive tool calls. "
+                            "Tools are temporarily disabled. Explain what went wrong "
+                            "and what you were trying to do. The user may help you. "
+                            "Tools will be re-enabled on your next turn."
+                        ),
                     )
-                    break
-                if self._consecutive_errors >= 3:
+                    self.session.add_message(hint)
+                elif self._consecutive_errors >= 3:
                     hint = Message(
                         role=Role.USER,
                         content=(

@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Dict, List, Optional
 
 from .qt_compat import (
     QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QTimer, Qt,
 )
 from .message_widgets import (
-    AssistantMessageWidget, ErrorMessageWidget, ThinkingWidget,
-    ToolCallWidget, UserMessageWidget,
+    AssistantMessageWidget, ErrorMessageWidget, QueuedMessageWidget,
+    ThinkingWidget, ToolCallWidget, UserMessageWidget, UserQuestionWidget,
 )
 from ..agent.turn import TurnEvent, TurnEventType
 from ..core.types import Message, Role
+from .plan_view import PlanView
 
 
 class ChatView(QScrollArea):
@@ -37,6 +39,21 @@ class ChatView(QScrollArea):
         self._current_assistant: Optional[AssistantMessageWidget] = None
         self._tool_widgets: Dict[str, ToolCallWidget] = {}
         self._thinking: Optional[ThinkingWidget] = None
+        self._thinking_shown_at: float = 0.0
+        self._plan_view: Optional[PlanView] = None
+
+        # Member timer for scroll-to-bottom — child of self, auto-destroyed.
+        # Replaces QTimer.singleShot(lambda) which captured `self` and could
+        # fire on a dead wrapper if the widget was destroyed within 50ms.
+        self._scroll_timer = QTimer(self)
+        self._scroll_timer.setSingleShot(True)
+        self._scroll_timer.setInterval(50)
+        self._scroll_timer.timeout.connect(self._do_scroll)
+
+        # Timer for minimum thinking display duration (500ms)
+        self._thinking_hide_timer = QTimer(self)
+        self._thinking_hide_timer.setSingleShot(True)
+        self._thinking_hide_timer.timeout.connect(self._force_hide_thinking)
 
     def add_user_message(self, text: str) -> None:
         widget = UserMessageWidget(text)
@@ -48,16 +65,33 @@ class ChatView(QScrollArea):
         self._insert_widget(ErrorMessageWidget(text))
         self._scroll_to_bottom()
 
+    def add_queued_message(self, text: str) -> None:
+        """Display a queued message with dashed border."""
+        self._insert_widget(QueuedMessageWidget(text))
+        self._scroll_to_bottom()
+
     def _show_thinking(self) -> None:
         """Show the animated thinking indicator."""
         if self._thinking is not None:
             return  # already showing
         self._thinking = ThinkingWidget()
+        self._thinking_shown_at = time.monotonic()
         self._insert_widget(self._thinking)
         self._scroll_to_bottom()
 
     def _hide_thinking(self) -> None:
-        """Remove the thinking indicator."""
+        """Remove the thinking indicator, respecting minimum display time."""
+        if self._thinking is None:
+            return
+        elapsed_ms = (time.monotonic() - self._thinking_shown_at) * 1000
+        if elapsed_ms < 500:
+            remaining = int(500 - elapsed_ms)
+            self._thinking_hide_timer.start(remaining)
+            return
+        self._force_hide_thinking()
+
+    def _force_hide_thinking(self) -> None:
+        """Immediately remove the thinking indicator."""
         if self._thinking is None:
             return
         self._thinking.stop()
@@ -120,6 +154,31 @@ class ChatView(QScrollArea):
             self._insert_widget(ErrorMessageWidget(event.error or "Unknown error"))
             self._scroll_to_bottom()
 
+        elif etype == TurnEventType.USER_QUESTION:
+            self._hide_thinking()
+            options = event.metadata.get("options", [])
+            self._insert_widget(UserQuestionWidget(event.text, options))
+            self._scroll_to_bottom()
+
+        elif etype == TurnEventType.PLAN_GENERATED:
+            self._hide_thinking()
+            self._plan_view = PlanView()
+            if event.plan_steps:
+                self._plan_view.set_plan(event.plan_steps)
+            self._insert_widget(self._plan_view)
+            self._scroll_to_bottom()
+
+        elif etype == TurnEventType.PLAN_STEP_START:
+            if self._plan_view:
+                self._plan_view.set_step_status(event.plan_step_index, "active")
+                self._plan_view.set_buttons_visible(False)
+            self._scroll_to_bottom()
+
+        elif etype == TurnEventType.PLAN_STEP_DONE:
+            if self._plan_view:
+                self._plan_view.set_step_status(event.plan_step_index, "done")
+            self._scroll_to_bottom()
+
         elif etype == TurnEventType.CANCELLED:
             self._hide_thinking()
             self._insert_widget(ErrorMessageWidget("Cancelled by user"))
@@ -158,7 +217,8 @@ class ChatView(QScrollArea):
         self._scroll_to_bottom()
 
     def clear_chat(self) -> None:
-        self._hide_thinking()
+        self._force_hide_thinking()
+        self._thinking_hide_timer.stop()
         while self._layout.count() > 1:
             item = self._layout.takeAt(0)
             widget = item.widget()
@@ -166,6 +226,7 @@ class ChatView(QScrollArea):
                 widget.deleteLater()
         self._current_assistant = None
         self._tool_widgets.clear()
+        self._plan_view = None
 
     def _insert_widget(self, widget: QWidget) -> None:
         """Insert before the stretch at the end."""
@@ -173,6 +234,16 @@ class ChatView(QScrollArea):
         self._layout.insertWidget(idx, widget)
 
     def _scroll_to_bottom(self) -> None:
-        QTimer.singleShot(50, lambda: self.verticalScrollBar().setValue(
-            self.verticalScrollBar().maximum()
-        ))
+        """Schedule a scroll-to-bottom. Restarting the timer debounces."""
+        self._scroll_timer.start()
+
+    def _do_scroll(self) -> None:
+        self._container.adjustSize()
+        sb = self.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+    def shutdown(self) -> None:
+        """Stop all timers. Call before widget destruction."""
+        self._scroll_timer.stop()
+        self._thinking_hide_timer.stop()
+        self._force_hide_thinking()

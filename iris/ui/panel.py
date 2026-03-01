@@ -23,7 +23,7 @@ from .session_controller import SessionController
 from .actions import IRISUIHooks
 from ..core.config import IRISConfig
 from ..core.logging import log_error, log_info, log_debug
-from ..agent.turn import TurnEvent
+from ..agent.turn import TurnEvent, TurnEventType
 
 try:
     idaapi = importlib.import_module("idaapi")
@@ -41,7 +41,9 @@ class IRISPanel(idaapi.PluginForm if _HAS_IDA else QWidget):
         log_debug(f"Config loaded: provider={self._config.provider.name} model={self._config.provider.model}")
         self._ctrl = SessionController(self._config)
         self._poll_timer: Optional[QTimer] = None
+        self._polling = False  # re-entrancy guard for _poll_events
         self._root: Optional[QWidget] = None
+        self._pending_answer = False
 
         # Pre-warm OAuth cache in a background thread so the settings dialog
         # doesn't need to spawn subprocesses during widget construction.
@@ -70,11 +72,11 @@ class IRISPanel(idaapi.PluginForm if _HAS_IDA else QWidget):
 
         def OnClose(self, form):  # noqa: N802
             try:
-                if self._poll_timer:
-                    self._poll_timer.stop()
-                    self._poll_timer = None
+                self._stop_poll_timer()
                 if hasattr(self, '_context_bar') and self._context_bar:
                     self._context_bar.stop()
+                if hasattr(self, '_chat_view') and self._chat_view:
+                    self._chat_view.shutdown()
                 if hasattr(self, '_ui_hooks') and self._ui_hooks:
                     self._ui_hooks.unhook()
                     self._ui_hooks = None
@@ -182,9 +184,18 @@ class IRISPanel(idaapi.PluginForm if _HAS_IDA else QWidget):
     def _on_submit(self, text: str) -> None:
         if not text:
             return
+        # Deliver answer to a pending ask_user question
+        if self._pending_answer:
+            self._pending_answer = False
+            self._chat_view.add_user_message(text)
+            self._set_running(True)
+            runner = self._ctrl.get_runner()
+            if runner:
+                runner.agent_loop.submit_user_answer(text)
+            return
         if self._ctrl.is_agent_running:
             self._ctrl.queue_message(text)
-            self._chat_view.add_user_message(f"[queued] {text}")
+            self._chat_view.add_queued_message(text)
             return
         self._start_agent(text)
 
@@ -230,19 +241,47 @@ class IRISPanel(idaapi.PluginForm if _HAS_IDA else QWidget):
             self._set_running(False)
             return
 
-        # Poll the event queue from the Qt thread — no cross-thread signals
-        self._poll_timer = QTimer()
-        self._poll_timer.timeout.connect(self._poll_events)
+        # Poll the event queue from the Qt thread — no cross-thread signals.
+        # Reuse a single parented timer to avoid:
+        #  - Parentless QTimer UAF via Python 3.14 deferred refcounting
+        #  - Timer destruction inside its own signal handler
+        self._ensure_poll_timer()
         self._poll_timer.start(50)
 
+    def _ensure_poll_timer(self) -> None:
+        """Create the poll timer once, parented to _root for deterministic destruction."""
+        if self._poll_timer is not None:
+            return
+        self._poll_timer = QTimer(self._root)
+        self._poll_timer.timeout.connect(self._poll_events)
+
+    def _stop_poll_timer(self) -> None:
+        """Safely stop and discard the poll timer."""
+        if self._poll_timer is not None:
+            self._poll_timer.stop()
+            try:
+                self._poll_timer.timeout.disconnect(self._poll_events)
+            except (RuntimeError, TypeError):
+                pass
+            self._poll_timer.deleteLater()
+            self._poll_timer = None
+
     def _poll_events(self) -> None:
-        for _ in range(20):  # Process up to 20 events per tick
-            event = self._ctrl.get_event(timeout=0)
-            if event is None:
-                if not self._ctrl.is_agent_running:
-                    self._on_agent_finished()
-                return
-            self._on_event(event)
+        # Re-entrancy guard: IDA's execute_sync pumps the Qt event loop,
+        # which can fire this timer again while we're already inside it.
+        if self._polling or self._root is None:
+            return
+        self._polling = True
+        try:
+            for _ in range(20):  # Process up to 20 events per tick
+                event = self._ctrl.get_event(timeout=0)
+                if event is None:
+                    if not self._ctrl.is_agent_running:
+                        self._on_agent_finished()
+                    return
+                self._on_event(event)
+        finally:
+            self._polling = False
 
     def _on_event(self, event: TurnEvent) -> None:
         if self._root is None:
@@ -250,11 +289,17 @@ class IRISPanel(idaapi.PluginForm if _HAS_IDA else QWidget):
         self._chat_view.handle_event(event)
         if event.usage:
             self._context_bar.set_tokens(self._ctrl.session.total_usage.total_tokens)
+        # ask_user: enable input so user can type an answer
+        if event.type == TurnEventType.USER_QUESTION:
+            self._pending_answer = True
+            self._set_running(False)  # Show send button, enable input
 
     def _on_agent_finished(self) -> None:
+        if self._root is None:
+            return
+        # Stop the timer — don't destroy it; _start_agent() will reuse it.
         if self._poll_timer:
             self._poll_timer.stop()
-            self._poll_timer = None
         self._set_running(False)
 
         next_msg = self._ctrl.on_agent_finished()

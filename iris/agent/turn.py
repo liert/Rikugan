@@ -21,6 +21,7 @@ class TurnEventType(str, Enum):
     ERROR = "error"
     CANCELLED = "cancelled"
     USAGE_UPDATE = "usage_update"
+    USER_QUESTION = "user_question"
     PLAN_GENERATED = "plan_generated"
     PLAN_STEP_START = "plan_step_start"
     PLAN_STEP_DONE = "plan_step_done"
@@ -100,3 +101,29 @@ class TurnEvent:
     @staticmethod
     def usage_update(usage: TokenUsage) -> "TurnEvent":
         return TurnEvent(type=TurnEventType.USAGE_UPDATE, usage=usage)
+
+    @staticmethod
+    def user_question(question: str, options: Optional[List[str]], tool_call_id: str) -> "TurnEvent":
+        return TurnEvent(
+            type=TurnEventType.USER_QUESTION,
+            text=question, tool_call_id=tool_call_id,
+            metadata={"options": options or []},
+        )
+
+    @staticmethod
+    def plan_generated(steps: List[str]) -> "TurnEvent":
+        return TurnEvent(type=TurnEventType.PLAN_GENERATED, plan_steps=steps)
+
+    @staticmethod
+    def plan_step_start(index: int, description: str) -> "TurnEvent":
+        return TurnEvent(
+            type=TurnEventType.PLAN_STEP_START,
+            plan_step_index=index, text=description,
+        )
+
+    @staticmethod
+    def plan_step_done(index: int, result: str) -> "TurnEvent":
+        return TurnEvent(
+            type=TurnEventType.PLAN_STEP_DONE,
+            plan_step_index=index, text=result,
+        )

@@ -34,6 +34,36 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: Dict[str, ToolDefinition] = {}
 
+    @staticmethod
+    def _coerce_arguments(defn: ToolDefinition, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Coerce mistyped tool arguments to match the schema.
+
+        LLMs sometimes send integers as strings (e.g. "30" instead of 30).
+        Walk the parameter schema and cast values to their declared types.
+        """
+        if not defn.parameters or not arguments:
+            return arguments
+
+        param_types = {p.name: p.type for p in defn.parameters}
+        coerced = dict(arguments)
+
+        for key, value in coerced.items():
+            expected = param_types.get(key)
+            if expected is None:
+                continue
+
+            try:
+                if expected == "integer" and not isinstance(value, int):
+                    coerced[key] = int(value)
+                elif expected == "number" and not isinstance(value, (int, float)):
+                    coerced[key] = float(value)
+                elif expected == "boolean" and not isinstance(value, bool):
+                    coerced[key] = str(value).lower() in ("true", "1", "yes")
+            except (ValueError, TypeError):
+                pass  # Let the handler raise a proper validation error
+
+        return coerced
+
     def register(self, defn: ToolDefinition) -> None:
         self._tools[defn.name] = defn
         log_debug(f"Registered tool: {defn.name}")
@@ -69,6 +99,8 @@ class ToolRegistry:
             raise ToolNotFoundError(f"Unknown tool: {name}", tool_name=name)
         if defn.handler is None:
             raise ToolError(f"Tool {name} has no handler", tool_name=name)
+
+        arguments = self._coerce_arguments(defn, arguments)
 
         try:
             result = defn.handler(**arguments)

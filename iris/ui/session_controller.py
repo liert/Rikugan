@@ -79,6 +79,10 @@ class SessionController:
     def is_agent_running(self) -> bool:
         return self._runner is not None and self._runner.agent_loop.is_running
 
+    def get_runner(self) -> Optional[BackgroundAgentRunner]:
+        """Return the current BackgroundAgentRunner, or None."""
+        return self._runner
+
     # -- Agent lifecycle --
 
     def start_agent(self, user_message: str) -> Optional[str]:

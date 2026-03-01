@@ -228,12 +228,16 @@ class ThinkingWidget(QFrame):
         self._phrase_label.setStyleSheet("color: #808080; font-style: italic; font-size: 12px;")
         layout.addWidget(self._phrase_label, 1)
 
+        self._stopped = False
+
         # Animate via QTimer — safe, no custom Signals
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(900)
 
     def _tick(self) -> None:
+        if self._stopped:
+            return
         self._star_idx = (self._star_idx + 1) % len(self._STAR_FRAMES)
         self._star_label.setText(self._STAR_FRAMES[self._star_idx])
 
@@ -244,10 +248,81 @@ class ThinkingWidget(QFrame):
 
     def stop(self) -> None:
         """Stop animation. Call before removing from layout."""
+        self._stopped = True
         try:
             self._timer.stop()
-        except RuntimeError:
+            self._timer.timeout.disconnect(self._tick)
+        except (RuntimeError, TypeError):
             pass
+
+
+class QueuedMessageWidget(QFrame):
+    """Displays a queued user message with dashed border."""
+
+    def __init__(self, text: str, parent: QWidget = None):
+        super().__init__(parent)
+        self.setObjectName("message_queued")
+        self.setStyleSheet(
+            "QFrame#message_queued { border: 1px dashed #007acc; "
+            "border-radius: 6px; background: #1e1e2e; }"
+        )
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+
+        content_layout = QVBoxLayout()
+
+        role_label = QLabel("You")
+        role_label.setStyleSheet("color: #4ec9b0; font-weight: bold; font-size: 11px;")
+        content_layout.addWidget(role_label)
+
+        content = QLabel(text)
+        content.setWordWrap(True)
+        content.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        content.setStyleSheet("color: #d4d4d4; font-size: 13px;")
+        content_layout.addWidget(content)
+
+        layout.addLayout(content_layout, 1)
+
+        badge = QLabel("[queued]")
+        badge.setStyleSheet("color: #808080; font-size: 10px; font-style: italic;")
+        badge.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(badge)
+
+
+class UserQuestionWidget(QFrame):
+    """Displays a question from the agent to the user."""
+
+    def __init__(self, question: str, options: list = None, parent: QWidget = None):
+        super().__init__(parent)
+        self.setObjectName("message_question")
+        self.setStyleSheet(
+            "QFrame#message_question { border: 1px solid #dcdcaa; "
+            "border-radius: 6px; background: #2d2d1e; }"
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+
+        header = QLabel("IRIS asks:")
+        header.setStyleSheet("color: #dcdcaa; font-weight: bold; font-size: 11px;")
+        layout.addWidget(header)
+
+        q_label = QLabel(question)
+        q_label.setWordWrap(True)
+        q_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        q_label.setStyleSheet("color: #d4d4d4; font-size: 13px;")
+        layout.addWidget(q_label)
+
+        if options:
+            for i, opt in enumerate(options, 1):
+                opt_label = QLabel(f"  {i}. {opt}")
+                opt_label.setStyleSheet("color: #9cdcfe; font-size: 12px;")
+                layout.addWidget(opt_label)
+
+            hint = QLabel("Type your answer or a number to choose an option.")
+            hint.setStyleSheet("color: #808080; font-size: 10px; font-style: italic;")
+            layout.addWidget(hint)
 
 
 class ErrorMessageWidget(QFrame):

@@ -24,6 +24,9 @@ def _parse_frontmatter(text: str) -> Dict[str, Any]:
       key:                     → list (block)
         - item1
         - item2
+      key:                     → dict (nested key-value)
+        subkey: value
+        subkey2: value2
     """
     result: Dict[str, Any] = {}
     lines = text.strip().splitlines()
@@ -57,20 +60,34 @@ def _parse_frontmatter(text: str) -> Dict[str, Any]:
                 result[key] = value_part.strip("\"'")
         else:
             # Check for block list (next lines starting with "  - ")
+            # or nested dict (next lines starting with "  key: value")
             block_items: List[str] = []
+            nested_dict: Dict[str, str] = {}
             j = i + 1
             while j < len(lines):
                 bline = lines[j]
+                # Block list item
                 bm = re.match(r"^\s+-\s+(.*)", bline)
                 if bm:
                     block_items.append(bm.group(1).strip().strip("\"'"))
                     j += 1
-                elif not bline.strip():
+                    continue
+                # Nested key-value pair (indented)
+                nm = re.match(r"^\s+(\w[\w\-]*)\s*:\s+(.*)", bline)
+                if nm:
+                    nested_dict[nm.group(1).strip()] = nm.group(2).strip().strip("\"'")
                     j += 1
-                else:
-                    break
+                    continue
+                if not bline.strip():
+                    j += 1
+                    continue
+                break
             if block_items:
                 result[key] = block_items
+                i = j
+                continue
+            elif nested_dict:
+                result[key] = nested_dict
                 i = j
                 continue
             else:
@@ -142,7 +159,37 @@ def _load_body(md_path: str) -> str:
         raise SkillError(f"Cannot read skill file {md_path}: {e}")
 
     _fm, body = _split_frontmatter(text)
-    return body.strip()
+    body = body.strip()
+
+    # Append reference files from <skill>/references/ if they exist
+    refs = _load_references(os.path.dirname(md_path))
+    if refs:
+        body += "\n\n" + refs
+
+    return body
+
+
+def _load_references(skill_dir: str) -> str:
+    """Load .md files from <skill>/references/ and concatenate them."""
+    refs_dir = os.path.join(skill_dir, "references")
+    if not os.path.isdir(refs_dir):
+        return ""
+
+    parts: List[str] = []
+    for fname in sorted(os.listdir(refs_dir)):
+        if not fname.endswith(".md"):
+            continue
+        fpath = os.path.join(refs_dir, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content:
+                parts.append(f"## Reference: {fname}\n{content}")
+                log_debug(f"Loaded skill reference: {fpath}")
+        except OSError as e:
+            log_error(f"Failed to load skill reference {fpath}: {e}")
+
+    return "\n\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -174,14 +221,22 @@ def discover_skills(skills_dir: str) -> List[SkillDefinition]:
             fm_text, _body = _split_frontmatter(text)
             fm = _parse_frontmatter(fm_text) if fm_text else {}
 
+            # Extract author/version from top-level or nested metadata
+            meta = fm.get("metadata", {})
+            author = fm.get("author", "")
+            version = fm.get("version", "")
+            if isinstance(meta, dict):
+                author = author or meta.get("author", "")
+                version = version or meta.get("version", "")
+
             skill = SkillDefinition(
                 name=fm.get("name", entry),
                 description=fm.get("description", ""),
                 directory=skill_dir,
                 allowed_tools=fm.get("allowed_tools", []),
                 tags=fm.get("tags", []),
-                author=fm.get("author", ""),
-                version=fm.get("version", ""),
+                author=author,
+                version=version,
                 frontmatter=fm,
                 _body=None,  # lazy
                 _md_path=md_path,
