@@ -54,11 +54,17 @@ class ToolRegistry:
 
             try:
                 if expected == "integer" and not isinstance(value, int):
+                    # Handle "30", "30.0", "0x1e" etc.
+                    coerced[key] = int(float(value))
+                elif expected == "integer" and isinstance(value, bool):
+                    # bool is a subclass of int but should be coerced to plain int
                     coerced[key] = int(value)
                 elif expected == "number" and not isinstance(value, (int, float)):
                     coerced[key] = float(value)
                 elif expected == "boolean" and not isinstance(value, bool):
                     coerced[key] = str(value).lower() in ("true", "1", "yes")
+                elif expected == "string" and not isinstance(value, str):
+                    coerced[key] = str(value)
             except (ValueError, TypeError):
                 pass  # Let the handler raise a proper validation error
 

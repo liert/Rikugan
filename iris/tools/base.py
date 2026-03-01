@@ -96,9 +96,11 @@ def _resolve_type(annotation: Any) -> tuple:
     origin = getattr(annotation, "__origin__", None)
     args = getattr(annotation, "__args__", ())
 
-    # Handle Annotated
-    if origin is getattr(typing, "Annotated", None):
-        base = args[0] if args else str
+    # Handle Annotated — use typing.get_origin() because on Python 3.14
+    # Annotated[int, ...].__origin__ is `int`, not `typing.Annotated`.
+    if typing.get_origin(annotation) is typing.Annotated:
+        real_args = typing.get_args(annotation)
+        base = real_args[0] if real_args else str
         return _resolve_type(base)
 
     # Handle Optional
@@ -137,16 +139,13 @@ def _build_parameters(func: Callable) -> List[ParameterSchema]:
             continue
 
         annotation = hints.get(name, str)
-        origin = getattr(annotation, "__origin__", None)
-        args = getattr(annotation, "__args__", ())
 
-        # Extract Annotated metadata
+        # Extract Annotated metadata — use typing.get_origin() because
+        # on Python 3.14 Annotated[X, ...].__origin__ is X, not Annotated.
         meta: Dict[str, Any] = {}
-        if origin is getattr(typing, "Annotated", None) and args:
+        if typing.get_origin(annotation) is typing.Annotated:
             meta = _extract_annotation_metadata(annotation)
-            annotation_for_type = annotation
-        else:
-            annotation_for_type = annotation
+        annotation_for_type = annotation
 
         json_type, extra, base_type = _resolve_type(annotation_for_type)
 
