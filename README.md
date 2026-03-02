@@ -1,13 +1,16 @@
-# 六眼 Rikugan — The IDA Pro + Binary Ninja companion
+# Rikugan (六眼)
 
-A reverse-engineering plugin for **IDA Pro and Binary Ninja** that integrates a multi-provider LLM agent directly in your analysis UI. Rikugan provides an agentic loop with streaming, 57 host-native tools, 7 built-in analysis skills, MCP client support, and a native Qt chat panel.
+A reverse-engineering agent for **IDA Pro** and **Binary Ninja** that integrates a multi-provider LLM directly in your analysis UI. This project was done together with my friend, Claude Code.
 
-This project was done together with my friend, Claude Code.
 
+![alt text](assets/binja_showcase.png)
+
+
+![alt text](assets/ida_showcase.png)
 
 ## Is this another MCP client?
 
-No, Rikugan is an agent built to live inside your RE host (**IDA Pro or Binary Ninja**). It does not consume an MCP server to interact with the host database; it has its own agentic loop, context management, its own role prompt (you can check it [here](rikugan/agent/system_prompt.py)), and an in-process tool orchestration layer.
+No, Rikugan is an ***agent*** built to live inside your RE host (**IDA Pro or Binary Ninja**). It does not consume an MCP server to interact with the host database; it has its own agentic loop, context management, its own role prompt (you can check it [here](rikugan/agent/system_prompt.py)), and an in-process tool orchestration layer.
 
 The agent loop is a generator-based turn cycle: each user message kicks off a stream→execute→repeat pipeline where the LLM response is streamed token-by-token, tool calls are intercepted and dispatched.
 
@@ -22,28 +25,48 @@ Advantages:
 - Expandable to many LLM providers and local installations (Ollama)
 - Quick enabling, just hit Ctrl+Shift+I and the chat will appear
 
-![Rikugan chat panel](assets/chat.png)
-
 Also, building agents is an amazing area of study, especially coding with them.
 
 
 ## Features
 
-- **57 host-native tools** — navigation, decompiler, disassembly, xrefs, strings, annotations, type engineering, microcode/IL, scripting
-- **7 built-in skills** — malware analysis, deobfuscation, vulnerability audit, driver analysis, CTF solving, and more
-- **MCP client** — connect external MCP servers, their tools appear alongside built-in ones
-- **9 quick actions** — context-menu/command integration for instant analysis
-- **5 LLM providers** — Anthropic (Claude), OpenAI, Gemini, Ollama, OpenAI-compatible
-- **Message queuing** — send follow-up messages while the agent is working; they auto-submit when the current turn finishes
-- **Microcode/IL tools** — Hex-Rays microcode in IDA, native IL tools (LLIL/MLIL/HLIL) in Binary Ninja
-- **Host-specific system prompts** — each host gets a tailored prompt with correct terminology
-- **Session persistence** — auto-save/restore conversations across host restarts
+### IDA Pro
+
+| Area | Details |
+|------|---------|
+| **56 tools** | Navigation, decompiler, disassembly, xrefs, strings, annotations, type engineering, Hex-Rays microcode, scripting |
+| **9 quick actions** | Right-click context menu: explain, rename, deobfuscate, vuln audit, suggest types, annotate, clean microcode, xref analysis |
+| **Microcode tools** | Read, patch, and NOP Hex-Rays microcode; install/remove custom microcode optimizers |
+
+### Binary Ninja
+
+| Area | Details |
+|------|---------|
+| **56 tools** | Navigation, decompiler, disassembly, xrefs, strings, annotations, type engineering, native IL, scripting |
+| **9 quick actions** | Command palette and address-context menus: explain, rename, deobfuscate, vuln audit, suggest types, annotate, clean IL, xref analysis |
+| **IL tools** | Read, patch, and NOP LLIL/MLIL/HLIL instructions; install/remove custom IL optimizers |
+
+### Shared
+
+| Area | Details |
+|------|---------|
+| **9 built-in skills** | Malware analysis, deobfuscation, vulnerability audit, driver analysis, CTF solving, IDA scripting, BN scripting, general RE, Linux malware |
+| **5 LLM providers** | Anthropic (Claude), OpenAI, Gemini, Ollama, OpenAI-compatible |
+| **MCP client** | Connect external MCP servers — their tools appear alongside built-in ones |
+| **Multi-tab chat** | Multiple independent conversations per file, each with its own context |
+| **Chat export** | Export any conversation to Markdown with syntax-highlighted code blocks |
+| **Script approval** | `execute_python` requires explicit user approval — code is shown with syntax highlighting before execution |
+| **Message queuing** | Send follow-up messages while the agent is working; they auto-submit when the current turn finishes |
+| **Session persistence** | Auto-save/restore conversations per file across host restarts |
+| **Host-specific prompts** | Each host gets a tailored system prompt with correct terminology |
+
 
 ## Requirements
 
 - IDA Pro 9.0+ with Hex-Rays decompiler (recommended), or Binary Ninja (UI mode)
-- Python 3.9+ (3.14 is known to have problems with Qt)
+- Python 3.9+
 - At least one LLM provider
+- Windows, macOS, or Linux
 
 
 ## Installation
@@ -52,12 +75,12 @@ Clone this repository, then run the installer for your target host:
 
 **IDA Pro (Linux / macOS):**
 ```bash
-./install.sh
+./install_ida.sh
 ```
 
 **IDA Pro (Windows):**
 ```bat
-install.bat
+install_ida.bat
 ```
 
 **Binary Ninja (Linux / macOS):**
@@ -73,8 +96,8 @@ install_binaryninja.bat
 All scripts auto-detect the user directory for their host. If detection fails (or you have a non-standard setup), pass the path explicitly:
 
 ```bash
-./install.sh /path/to/ida/user/dir
-install.bat "C:\Users\you\AppData\Roaming\Hex-Rays\IDA Pro"
+./install_ida.sh /path/to/ida/user/dir
+install_ida.bat "C:\Users\you\AppData\Roaming\Hex-Rays\IDA Pro"
 ./install_binaryninja.sh /path/to/binaryninja/user/dir
 install_binaryninja.bat "C:\Users\you\AppData\Roaming\Binary Ninja"
 ```
@@ -88,9 +111,9 @@ Rikugan has a settings dialog to configure your model of choice. Open Rikugan �
 - IDA config: `~/.idapro/rikugan/config.json`
 - Binary Ninja config: `~/.binaryninja/rikugan/config.json` (or platform-equivalent user dir)
 
-![Settings dialog](assets/settings.png)
+![alt text](assets/rikugan_settings.png)
 
-**Anthropic OAuth:** If you have Claude Code installed and authenticated, Rikugan auto-detects the OAuth token from the macOS Keychain. Otherwise, you can get the OAuth token by running `claude setup-token` (you'll have to log in again).
+**Anthropic OAuth:** If you have Claude Code installed and authenticated, Rikugan auto-detects the OAuth token from the macOS Keychain. On other platforms, paste your API key manually or run `claude setup-token`.
 
 
 
@@ -98,17 +121,23 @@ Rikugan has a settings dialog to configure your model of choice. Open Rikugan �
 
 ### Open the panel
 
-IDA Pro: press **Ctrl+Shift+I** or go to **Edit → Plugins → Rikugan**.  
-Binary Ninja: use **Tools → Rikugan → Open Panel**.
+IDA Pro: press **Ctrl+Shift+I** or go to **Edit → Plugins → Rikugan**.
 
-![Panel overview](assets/panel.png)
+Binary Ninja: use **Tools → Rikugan → Open Panel** or use the icon on the right
 
+### Multi-tab chat
 
-Type a message and press **Enter** to send. Rikugan streams the response and executes host tools as needed.
+Each tab is an independent conversation with its own message history and context. Use the **+** button to create a new tab, or close tabs you no longer need. Tabs are tied to the current file — opening a different database starts a fresh set of tabs, and returning to a file restores its saved conversations.
 
-- **Enter** — send message
-- **Shift+Enter** — newline
-- **Escape** — cancel the current run (also clears queued messages)
+### Chat export
+
+Right-click a tab or click the **Export** button to save a conversation as Markdown. Tool calls and results are formatted with language-appropriate syntax highlighting (`c` for decompiled code, `x86asm` for disassembly, `python` for scripts, etc.).
+
+### Script approval
+
+The `execute_python` tool always asks for your permission before running. You see the full Python code with syntax highlighting in a scrollable preview, and can **Allow** or **Deny** each execution. The agent can never run the target binary on your machine.
+
+![alt text](assets/approval_example.png.png)
 
 ### Message queuing
 
@@ -116,24 +145,36 @@ You can send messages while the agent is working. They appear as `[queued]` in t
 
 ### Quick actions
 
-IDA Pro exposes these under right-click menus.  
+IDA Pro exposes these under right-click menus.
 Binary Ninja exposes equivalent commands under **Tools → Rikugan** and address-context command menus.
 
-| Action | Views | Behavior |
-|--------|-------|----------|
-| **Send to Rikugan** | disasm, pseudo | Pre-fills input with selection (Ctrl+Shift+A) |
-| **Explain this** | disasm, pseudo | Auto-explains the current function |
-| **Rename with Rikugan** | disasm, pseudo | Analyzes and renames with evidence |
-| **Deobfuscate with Rikugan** | disasm, pseudo | Systematic deobfuscation |
-| **Find vulnerabilities** | disasm, pseudo | Security audit |
-| **Suggest types** | disasm, pseudo | Infers types from usage patterns |
-| **Annotate function** | pseudo | Adds comments to decompiled code |
-| **Clean microcode / IL** | pseudo | Identifies and NOPs junk instructions |
-| **Xref analysis** | disasm, pseudo | Deep cross-reference tracing |
+| Action | Description |
+|--------|-------------|
+| **Send to Rikugan** | Pre-fills input with selection (Ctrl+Shift+A in IDA) |
+| **Explain this** | Auto-explains the current function |
+| **Rename with Rikugan** | Analyzes and renames with evidence |
+| **Deobfuscate with Rikugan** | Systematic deobfuscation |
+| **Find vulnerabilities** | Security audit |
+| **Suggest types** | Infers types from usage patterns |
+| **Annotate function** | Adds comments to decompiled code |
+| **Clean microcode / IL** | Identifies and NOPs junk instructions |
+| **Xref analysis** | Deep cross-reference tracing |
 
 ### Skills
 
 Skills are reusable analysis workflows. Type `/` in the input area to see available skills with autocomplete.
+
+| Skill | Description |
+|-------|-------------|
+| `/malware-analysis` | Windows PE malware — kill chain, IOC extraction, MITRE ATT&CK mapping |
+| `/linux-malware` | ELF malware — packing, persistence, IOC extraction |
+| `/deobfuscation` | String decryption, CFF removal, opaque predicates, MBA simplification |
+| `/vuln-audit` | Buffer overflows, format strings, integer issues, memory safety |
+| `/driver-analysis` | Windows kernel drivers — DriverEntry, dispatch table, IOCTL handlers |
+| `/ctf` | Capture-the-flag challenges — find the flag efficiently |
+| `/generic-re` | General-purpose binary understanding |
+| `/ida-scripting` | IDAPython API reference for writing scripts |
+| `/binja-scripting` | Binary Ninja Python API reference for writing scripts |
 
 Create custom skills in:
 
@@ -190,71 +231,41 @@ MCP servers are started when the plugin loads. Their tools appear alongside buil
 
 ## Tools
 
-57 tools organized by category. IDA and Binary Ninja share the same interface; BN uses native IL terminology.
+56 tools per host, organized by category. 50 tools are shared across both hosts with identical interfaces. Each host adds 6 host-specific tools for its native intermediate representation.
 
-| Category | IDA Tools | BN Tools (where different) |
-|----------|-----------|---------------------------|
-| **Navigation** | `get_cursor_position`, `get_current_function`, `jump_to`, `get_name_at`, `get_address_of` | same |
-| **Functions** | `list_functions`, `get_function_info`, `search_functions` | same |
-| **Strings** | `list_strings`, `search_strings`, `get_string_at` | same |
-| **Database** | `list_segments`, `list_imports`, `list_exports`, `get_binary_info`, `read_bytes` | same |
-| **Disassembly** | `read_disassembly`, `read_function_disassembly`, `get_instruction_info` | same |
-| **Decompiler** | `decompile_function`, `get_pseudocode`, `get_decompiler_variables` | same |
-| **Xrefs** | `xrefs_to`, `xrefs_from`, `function_xrefs` | same |
-| **Annotations** | `rename_function`, `rename_variable`, `set_comment`, `set_function_comment`, `rename_address`, `set_type` | same |
-| **Types** | `create_struct`, `modify_struct`, `get_struct_info`, `list_structs`, `create_enum`, `modify_enum`, `get_enum_info`, `list_enums`, `create_typedef`, `apply_struct_to_address`, `apply_type_to_variable`, `set_function_prototype`, `import_c_header`, `suggest_struct_from_accesses`, `propagate_type`, `get_type_libraries`, `import_type_from_library` | same |
-| **Microcode (IDA)** | `get_microcode`, `get_microcode_block`, `nop_microcode`, `install_microcode_optimizer`, `remove_microcode_optimizer`, `list_microcode_optimizers`, `redecompile_function` | — |
-| **IL (BN)** | — | `get_il`, `get_il_block`, `nop_instructions`, `install_il_optimizer`, `remove_il_optimizer`, `list_il_optimizers`, `redecompile_function` |
-| **Scripting** | `execute_python` (last resort — the agent prefers built-in tools) | same |
+### Shared tools (50)
 
-Binary Ninja uses native IL levels (`llil`, `mlil`, `hlil`) instead of IDA's MMAT maturity levels.
+| Category | Tools |
+|----------|-------|
+| **Navigation** | `get_cursor_position` `get_current_function` `jump_to` `get_name_at` `get_address_of` |
+| **Functions** | `list_functions` `get_function_info` `search_functions` |
+| **Strings** | `list_strings` `search_strings` `get_string_at` |
+| **Database** | `list_segments` `list_imports` `list_exports` `get_binary_info` `read_bytes` |
+| **Disassembly** | `read_disassembly` `read_function_disassembly` `get_instruction_info` |
+| **Decompiler** | `decompile_function` `get_pseudocode` `get_decompiler_variables` |
+| **Xrefs** | `xrefs_to` `xrefs_from` `function_xrefs` |
+| **Annotations** | `rename_function` `rename_variable` `set_comment` `set_function_comment` `rename_address` `set_type` |
+| **Types** | `create_struct` `modify_struct` `get_struct_info` `list_structs` `create_enum` `modify_enum` `get_enum_info` `list_enums` `create_typedef` `apply_struct_to_address` `apply_type_to_variable` `set_function_prototype` `import_c_header` `suggest_struct_from_accesses` `propagate_type` `get_type_libraries` `import_type_from_library` |
+| **Scripting** | `execute_python` — requires user approval before each execution |
 
+### IDA-only tools (6)
 
-## Examples
+| Category | Tools |
+|----------|-------|
+| **Microcode** | `get_microcode` `get_microcode_block` `nop_microcode` `install_microcode_optimizer` `remove_microcode_optimizer` `list_microcode_optimizers` |
 
-Here's some practical and cool examples with Rikugan:
+Uses Hex-Rays MMAT maturity levels. Includes `redecompile_function` to refresh output after microcode patches.
 
-### Removing junk code 
+### Binary Ninja-only tools (6)
 
-### Solving CTF's
+| Category | Tools |
+|----------|-------|
+| **IL** | `get_il` `get_il_block` `nop_instructions` `install_il_optimizer` `remove_il_optimizer` `list_il_optimizers` |
 
-Testing against Flare-On's 2025 challeng 7: "[The Boss Needs Help](https://attachments-us-west-2.insided.com/7b772344-fabe-4978-9776-4a4b34d2ba67/7_%20The%20Boss%20Needs%20Help.pdf?Expires=1772357715&Signature=ilnXKZgpMaTBce5EfgI~OxlXNrsSAhHgtVaJU~ZAOfsmBzF5~O3Wkmgl6tRgQqeXlMhyMC3YSgAqdE33fS3azduoKngCnSq4-~fMOLb6A~BN6ReW8xomVaAmcj6GtnkSDlHpObjitsOObTAG2dZOm0bfCG2kkpaYm0LbcRulw5luXn7sOazQs~Q0uQ2o~AGTTwwqMQ6dTzWNMABkoAxbEzNEgtDLQYcWN7dRLSigh2dfA~IvtK9DXsfrPcBNmLN4Wbug8YTRb3R0SgFsDBGFo0GMDhF-bQbeNQqCjcBgG~LFPyigvnfs5nleYjE2WWpZxOtFrDFa~FLWB6-hMm6AwQ__&Key-Pair-Id=APKAJODP2KXSV47YM4AA)"
-
-![alt text](image.png)
-
-Chat:
-
-```
-User: This is a CTF challenge, all functions are too big to read, can you identify how the obfuscation works ? dont read everything, otherwise you'll run out of tokens
-```
-
-Rikugan:
-```
-...(picture above)
+Uses native IL levels (`llil`, `mlil`, `hlil`). Includes `redecompile_function` to refresh output after IL patches.
 
 
-Only 3 long forward jumps — these are the real branching points (e.g., jnz loc_140213B75 skipping ~11KB, which corresponds to a major if/else for input validation)
-Only 2 unconditional jumps (one is a 4-byte nop-skip)
+## Conclusion
 
 
-The entire main function (109KB, 23,545 instructions) is completely linear — no loops, no backward edges. The program logic has been unrolled and flattened into a single straight-line sequence with the MBA chains acting as opaque computations between the small conditional blocks.
 
-
-3. How the Real Logic Hides
-
-The actual program logic is buried in:
-
-35 call instructions — the real functionality (memory allocation, string comparison sub_140081590 at 336KB, I/O, etc.)
-The short conditional jumps — these encode the actual comparisons/decisions but are drowned in MBA noise
-Register constant loads (mov esi, 654213BBh; mov r12d, 0D9DA45AEh...) — 5 registers loaded with constants at branch points, likely encoding state for subsequent MBA chains
-
-Want me to try to isolate the actual logic by filtering out the MBA noise, or focus on the string comparison function (sub_140081590)?
-```
-
-```
-User: remove all the junk and clean the function, identify the pattern and remove it
-```
-
-![alt text](assets/clean_ctf.png)
-
-### Batch renaming

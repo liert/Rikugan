@@ -1,6 +1,6 @@
 """Backward-compatible re-export for IDA action hooks.
 
-Canonical location: iris.ida.ui.actions
+Canonical location: rikugan.ida.ui.actions
 """
 
 from rikugan.ida.ui import actions as _ida_actions

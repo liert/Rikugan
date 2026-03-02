@@ -4,10 +4,23 @@ from __future__ import annotations
 
 import importlib
 import io
+import re
 import contextlib
 from typing import Annotated
 
 from .base import tool
+
+# Patterns that indicate process execution — blocked for safety.
+_BLOCKED_PATTERNS = [
+    r"\bsubprocess\b",
+    r"\bos\.system\s*\(",
+    r"\bos\.popen\s*\(",
+    r"\bos\.exec\w*\s*\(",
+    r"\bos\.spawn\w*\s*\(",
+    r"\bPopen\s*\(",
+    r"\b__import__\s*\(\s*['\"]subprocess['\"]\s*\)",
+]
+_BLOCKED_RE = re.compile("|".join(_BLOCKED_PATTERNS))
 
 # Cached namespace of common IDA modules — populated once, reused across calls.
 _IDA_MODULE_NAMES = (
@@ -44,6 +57,11 @@ def execute_python(
     The code runs with full access to IDA's Python API (idaapi, idautils, idc, etc.).
     Use print() to produce output that will be returned.
     """
+    # Block process-execution patterns (subprocess, os.system, etc.)
+    match = _BLOCKED_RE.search(code)
+    if match:
+        return f"Error: Blocked — code contains disallowed process execution: '{match.group()}'"
+
     stdout_buf = io.StringIO()
     stderr_buf = io.StringIO()
     namespace = _get_base_namespace()

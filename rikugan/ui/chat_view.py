@@ -7,12 +7,12 @@ import time
 from typing import Dict, List, Optional
 
 from .qt_compat import (
-    QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QTimer, Qt,
+    QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QTimer, Qt, Signal,
 )
 from .message_widgets import (
     AssistantMessageWidget, ErrorMessageWidget, QueuedMessageWidget,
-    ThinkingWidget, ToolBatchWidget, ToolCallWidget, UserMessageWidget,
-    UserQuestionWidget,
+    ThinkingWidget, ToolApprovalWidget, ToolBatchWidget, ToolCallWidget,
+    UserMessageWidget, UserQuestionWidget,
 )
 from ..agent.turn import TurnEvent, TurnEventType
 from ..core.types import Message, Role
@@ -24,6 +24,8 @@ _MAX_TOOL_PREVIEWS = 3
 
 class ChatView(QScrollArea):
     """Scrollable chat area that renders TurnEvents into widgets."""
+
+    tool_approval_submitted = Signal(str, str)  # (tool_call_id, "allow"/"deny")
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
@@ -77,6 +79,27 @@ class ChatView(QScrollArea):
     def add_queued_message(self, text: str) -> None:
         self._insert_widget(QueuedMessageWidget(text))
         self._scroll_to_bottom()
+
+    def remove_queued_messages(self) -> None:
+        """Remove all [queued] message widgets (e.g. on cancel)."""
+        layout = self._messages_layout
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            widget = item.widget() if item else None
+            if isinstance(widget, QueuedMessageWidget):
+                layout.removeWidget(widget)
+                widget.deleteLater()
+
+    def pop_first_queued_message(self) -> None:
+        """Remove the first [queued] widget (when it gets submitted)."""
+        layout = self._messages_layout
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            widget = item.widget() if item else None
+            if isinstance(widget, QueuedMessageWidget):
+                layout.removeWidget(widget)
+                widget.deleteLater()
+                return
 
     def _show_thinking(self) -> None:
         if self._thinking is not None:
@@ -239,11 +262,26 @@ class ChatView(QScrollArea):
                 self._plan_view.set_step_status(event.plan_step_index, "done")
             self._scroll_to_bottom()
 
+        elif etype == TurnEventType.TOOL_APPROVAL_REQUEST:
+            self._hide_thinking()
+            self._flush_batch()
+            widget = ToolApprovalWidget(
+                event.tool_call_id, event.tool_name,
+                event.tool_args, event.text,
+            )
+            widget.approved.connect(self._on_tool_approval)
+            self._insert_widget(widget)
+            self._scroll_to_bottom()
+
         elif etype == TurnEventType.CANCELLED:
             self._hide_thinking()
             self._flush_batch()
             self._insert_widget(ErrorMessageWidget("Cancelled by user"))
             self._scroll_to_bottom()
+
+    def _on_tool_approval(self, tool_call_id: str, decision: str) -> None:
+        """Forward tool approval decision to the panel/controller."""
+        self.tool_approval_submitted.emit(tool_call_id, decision)
 
     def restore_from_messages(self, messages: List[Message]) -> None:
         """Replay saved Message objects into the chat view."""

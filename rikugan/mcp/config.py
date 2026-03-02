@@ -26,7 +26,7 @@ def load_mcp_config(path: str = "") -> List[MCPServerConfig]:
     """Load MCP server configurations from the Rikugan config directory.
 
     When *path* is not given, uses ``RikuganConfig().mcp_config_path``
-    (``~/.idapro/iris/mcp.json``).
+    (``~/.idapro/rikugan/mcp.json``).
 
     Returns an empty list if the file doesn't exist (graceful no-op).
     """

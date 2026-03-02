@@ -16,8 +16,8 @@ if not exist "%SCRIPT_DIR%\rikugan_plugin.py" (
     exit /b 1
 )
 
-if not exist "%SCRIPT_DIR%\iris\" (
-    echo [-] iris\ package not found in %SCRIPT_DIR% — run this from the repo root
+if not exist "%SCRIPT_DIR%\rikugan\" (
+    echo [-] rikugan\ package not found in %SCRIPT_DIR% — run this from the repo root
     exit /b 1
 )
 
@@ -53,7 +53,7 @@ if not defined IDA_USER_DIR (
 )
 
 set "PLUGINS_DIR=%IDA_USER_DIR%\plugins"
-set "CONFIG_DIR=%IDA_USER_DIR%\iris"
+set "CONFIG_DIR=%IDA_USER_DIR%\rikugan"
 
 :: ── Install dependencies ─────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ if not exist "%CONFIG_DIR%\"  mkdir "%CONFIG_DIR%"
 :: ── Copy built-in skills ────────────────────────────────────────────
 
 set "SKILLS_DIR=%CONFIG_DIR%\skills"
-set "BUILTINS_SRC=%SCRIPT_DIR%\iris\skills\builtins"
+set "BUILTINS_SRC=%SCRIPT_DIR%\rikugan\skills\builtins"
 
 if exist "%BUILTINS_SRC%\" (
     echo [*] Installing built-in skills into %SKILLS_DIR%...
@@ -121,31 +121,31 @@ if !errorlevel! equ 0 (
     exit /b 1
 )
 
-:: iris/ package — use directory junction (symlink-like, no admin required)
-if exist "%PLUGINS_DIR%\iris\" (
+:: rikugan/ package — use directory junction (symlink-like, no admin required)
+if exist "%PLUGINS_DIR%\rikugan\" (
     :: Check if it's a junction
-    fsutil reparsepoint query "%PLUGINS_DIR%\iris" >nul 2>&1
+    fsutil reparsepoint query "%PLUGINS_DIR%\rikugan" >nul 2>&1
     if !errorlevel! equ 0 (
-        rmdir "%PLUGINS_DIR%\iris"
+        rmdir "%PLUGINS_DIR%\rikugan"
     ) else (
         :: Real directory — back it up
-        echo [!] Backing up existing iris\ to iris.bak\
-        if exist "%PLUGINS_DIR%\iris.bak\" rmdir /s /q "%PLUGINS_DIR%\iris.bak"
-        ren "%PLUGINS_DIR%\iris" "iris.bak"
+        echo [!] Backing up existing rikugan\ to rikugan.bak\
+        if exist "%PLUGINS_DIR%\rikugan.bak\" rmdir /s /q "%PLUGINS_DIR%\rikugan.bak"
+        ren "%PLUGINS_DIR%\rikugan" "rikugan.bak"
     )
 )
 
-mklink /J "%PLUGINS_DIR%\iris" "%SCRIPT_DIR%\iris" >nul 2>&1
+mklink /J "%PLUGINS_DIR%\rikugan" "%SCRIPT_DIR%\rikugan" >nul 2>&1
 if !errorlevel! equ 0 (
-    echo [+] iris\ -^> %PLUGINS_DIR%\iris  (junction)
+    echo [+] rikugan\ -^> %PLUGINS_DIR%\rikugan  (junction)
 ) else (
     :: Junction failed (rare), fall back to xcopy
     echo [!] Junction failed, falling back to copy...
-    xcopy "%SCRIPT_DIR%\iris" "%PLUGINS_DIR%\iris\" /E /I /Y /Q >nul
+    xcopy "%SCRIPT_DIR%\rikugan" "%PLUGINS_DIR%\rikugan\" /E /I /Y /Q >nul
     if !errorlevel! equ 0 (
-        echo [+] iris\ -^> %PLUGINS_DIR%\iris  (copied)
+        echo [+] rikugan\ -^> %PLUGINS_DIR%\rikugan  (copied)
     ) else (
-        echo [-] Failed to copy iris\ package
+        echo [-] Failed to copy rikugan\ package
         exit /b 1
     )
 )
@@ -155,7 +155,7 @@ if !errorlevel! equ 0 (
 echo.
 echo [+] Rikugan installed successfully!
 echo [*] Plugin:  %PLUGINS_DIR%\rikugan_plugin.py
-echo [*] Package: %PLUGINS_DIR%\iris
+echo [*] Package: %PLUGINS_DIR%\rikugan
 echo [*] Config:  %CONFIG_DIR%\
 echo [*] Skills:  %SKILLS_DIR%\
 echo.

@@ -17,6 +17,27 @@ except ImportError:
     pass
 
 
+# Xref type constants → human-readable names.
+# Covers code-ref (fl_*) and data-ref (dr_*) types from ida_xref.
+_XREF_TYPE_MAP = {
+    0:  "Data_Unknown",
+    1:  "dr_O",         # offset
+    2:  "dr_W",         # write
+    3:  "dr_R",         # read
+    4:  "dr_T",         # text/informational
+    5:  "dr_I",         # informational
+    16: "fl_CF",        # call far
+    17: "fl_CN",        # call near
+    18: "fl_JF",        # jump far
+    19: "fl_JN",        # jump near
+    20: "fl_US",        # user-specified
+    21: "fl_F",         # ordinary flow
+}
+
+def _xref_type_name(xtype: int) -> str:
+    """Get a readable name for an xref type, with fallback."""
+    return _XREF_TYPE_MAP.get(xtype, f"type_{xtype}")
+
 
 @tool(category="xrefs")
 def xrefs_to(
@@ -35,7 +56,7 @@ def xrefs_to(
             lines.append(f"  ... (truncated at {limit})")
             break
 
-        xtype = ida_xref.get_xref_type_name(xref.type)
+        xtype = _xref_type_name(xref.type)
         func = ida_funcs.get_func(xref.frm)
         fname = ida_name.get_name(func.start_ea) if func else "?"
         lines.append(f"  0x{xref.frm:x}  [{xtype:12s}]  in {fname}")
@@ -61,7 +82,7 @@ def xrefs_from(
         if count >= limit:
             lines.append(f"  ... (truncated at {limit})")
             break
-        xtype = ida_xref.get_xref_type_name(xref.type)
+        xtype = _xref_type_name(xref.type)
         target_name = ida_name.get_name(xref.to) or ""
         lines.append(f"  0x{xref.to:x}  [{xtype:12s}]  {target_name}")
         count += 1

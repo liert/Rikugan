@@ -33,11 +33,11 @@ def list_segments() -> str:
         seg = ida_segment.getseg(seg_ea)
         if seg:
             perms = ""
-            if seg.perm & ida_segment.SFL_READ:
+            if seg.perm & 4:  # R
                 perms += "R"
-            if seg.perm & ida_segment.SFL_WRITE:
+            if seg.perm & 2:  # W
                 perms += "W"
-            if seg.perm & ida_segment.SFL_EXEC:
+            if seg.perm & 1:  # X
                 perms += "X"
         lines.append(f"  {name:16s}  0x{seg_ea:x}–0x{end:x}  ({size:#x} bytes)  {perms}")
     return "\n".join(lines)
@@ -73,7 +73,7 @@ def list_exports() -> str:
     """List all exported functions/symbols."""
 
     lines = ["Exports:"]
-    for i, (ea, _, name) in enumerate(idautils.Entries()):
+    for i, (_, _, ea, name) in enumerate(idautils.Entries()):
         lines.append(f"  0x{ea:x}  {name}")
         if i >= 200:
             lines.append("  ... (truncated)")

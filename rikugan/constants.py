@@ -11,7 +11,7 @@ PLUGIN_VERSION = "0.1.0"
 PLUGIN_HOTKEY = "Ctrl+Shift+I"
 PLUGIN_COMMENT = "Intelligent Reverse-engineering Integrated System"
 
-CONFIG_DIR_NAME = "iris"
+CONFIG_DIR_NAME = "rikugan"
 CONFIG_FILE_NAME = "config.json"
 CHECKPOINTS_DIR_NAME = "checkpoints"
 

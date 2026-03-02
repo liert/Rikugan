@@ -51,9 +51,9 @@ else
 fi
 
 PLUGINS_DIR="$BN_USER_DIR/plugins"
-CONFIG_DIR="$BN_USER_DIR/iris"
+CONFIG_DIR="$BN_USER_DIR/rikugan"
 SKILLS_DIR="$CONFIG_DIR/skills"
-PLUGIN_LINK="$PLUGINS_DIR/iris"
+PLUGIN_LINK="$PLUGINS_DIR/rikugan"
 
 if [[ ! -f "$SCRIPT_DIR/rikugan_binaryninja.py" ]] || [[ ! -f "$SCRIPT_DIR/plugin.json" ]]; then
     err "Binary Ninja plugin files missing in $SCRIPT_DIR"
@@ -101,7 +101,7 @@ fi
 mkdir -p "$PLUGINS_DIR"
 mkdir -p "$SKILLS_DIR"
 
-BUILTINS_SRC="$SCRIPT_DIR/iris/skills/builtins"
+BUILTINS_SRC="$SCRIPT_DIR/rikugan/skills/builtins"
 if [[ -d "$BUILTINS_SRC" ]]; then
     info "Installing built-in skills into $SKILLS_DIR..."
     for skill in "$BUILTINS_SRC"/*/; do

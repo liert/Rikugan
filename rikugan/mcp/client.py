@@ -75,7 +75,7 @@ class MCPClient:
             result = self._send_request("initialize", {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "iris", "version": "0.1.0"},
+                "clientInfo": {"name": "rikugan", "version": "0.1.0"},
             }, timeout=timeout)
             log_debug(f"MCP[{self.name}]: initialize response: {json.dumps(result)[:200]}")
 

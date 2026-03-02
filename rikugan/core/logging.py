@@ -1,7 +1,7 @@
-"""Logging to IDA's output window AND a crash-proof log file.
+"""Logging to the host output window AND a crash-proof log file.
 
-The file log at ~/.idapro/rikugan/rikugan_debug.log is flushed after every
-write so the last line survives even if IDA crashes hard (SIGSEGV).
+The file log at <config_dir>/rikugan/rikugan_debug.log is flushed after every
+write so the last line survives even if the host crashes hard.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ _logger: Optional[logging.Logger] = None
 
 def _log_file_path() -> str:
     base = get_user_config_base_dir()
-    d = os.path.join(base, "iris")
+    d = os.path.join(base, "rikugan")
     os.makedirs(d, exist_ok=True)
     return os.path.join(d, "rikugan_debug.log")
 

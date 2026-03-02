@@ -13,8 +13,8 @@ class SkillRegistry:
     """Central registry of available skills.
 
     Discovers skills from two locations:
-    1. Built-in skills shipped with Rikugan (iris/skills/builtins/)
-    2. User skills (``~/.idapro/iris/skills/`` via RikuganConfig.skills_dir)
+    1. Built-in skills shipped with Rikugan (rikugan/skills/builtins/)
+    2. User skills (``~/.idapro/rikugan/skills/`` via RikuganConfig.skills_dir)
 
     User skills with the same slug override built-in ones.
     """

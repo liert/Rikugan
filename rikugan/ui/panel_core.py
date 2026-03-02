@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import threading
+import time
 from typing import Any, Callable, Dict, Optional
 
 from .qt_compat import (
     QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QTimer,
-    QTabWidget, QTabBar, QToolButton, Signal,
+    QTabWidget, QTabBar, QToolButton, Signal, QFileDialog, QMenu, Qt,
 )
 from .styles import DARK_THEME
 from .chat_view import ChatView
@@ -23,9 +25,12 @@ class _AddButtonTabBar(QTabBar):
     """Tab bar with an integrated '+' button positioned after the last tab."""
 
     add_tab_requested = Signal()
+    export_tab_requested = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
         self._add_btn = QToolButton(self)
         self._add_btn.setText("+")
         self._add_btn.setAutoRaise(True)
@@ -36,6 +41,16 @@ class _AddButtonTabBar(QTabBar):
             "QToolButton:hover { background: #3c3c3c; border-radius: 3px; }"
         )
         self._add_btn.clicked.connect(self.add_tab_requested)
+
+    def _show_context_menu(self, pos):
+        index = self.tabAt(pos)
+        if index < 0:
+            return
+        menu = QMenu(self)
+        export_action = menu.addAction("Export Chat")
+        action = menu.exec_(self.mapToGlobal(pos))
+        if action == export_action:
+            self.export_tab_requested.emit(index)
 
     def tabInserted(self, index):
         super().tabInserted(index)
@@ -86,6 +101,7 @@ class RikuganPanelCore(QWidget):
         self._chat_views: Dict[str, ChatView] = {}
         # Tab-id stored as widget property for lookup
         self._tab_id_for_index: Dict[int, str] = {}
+        self._context_bar: Optional[ContextBar] = None
 
         def _warm_oauth() -> None:
             try:
@@ -113,6 +129,7 @@ class RikuganPanelCore(QWidget):
         self._tab_widget.tabCloseRequested.connect(self._on_close_tab)
         self._tab_widget.currentChanged.connect(self._on_tab_changed)
         self._tab_bar.add_tab_requested.connect(self._on_new_tab)
+        self._tab_bar.export_tab_requested.connect(self._on_export_tab)
 
         # Style the tab bar
         self._tab_widget.setStyleSheet(
@@ -175,6 +192,12 @@ class RikuganPanelCore(QWidget):
         self._new_btn.clicked.connect(self._on_new_tab)
         btn_layout.addWidget(self._new_btn)
 
+        self._export_btn = QPushButton("Export")
+        self._export_btn.setFixedWidth(64)
+        self._export_btn.setStyleSheet(small_btn_style)
+        self._export_btn.clicked.connect(self._on_export_current)
+        btn_layout.addWidget(self._export_btn)
+
         self._settings_btn = QPushButton("Settings")
         self._settings_btn.setFixedWidth(64)
         self._settings_btn.setStyleSheet(small_btn_style)
@@ -208,6 +231,7 @@ class RikuganPanelCore(QWidget):
     def _create_tab(self, tab_id: str, label: str) -> ChatView:
         """Create a new ChatView and add it as a tab."""
         chat_view = ChatView()
+        chat_view.tool_approval_submitted.connect(self._on_tool_approval)
         self._chat_views[tab_id] = chat_view
         index = self._tab_widget.addTab(chat_view, label)
         self._tab_widget.setCurrentIndex(index)
@@ -237,6 +261,137 @@ class RikuganPanelCore(QWidget):
             chat_view.deleteLater()
         self._update_tab_bar_visibility()
 
+    def _on_export_tab(self, index: int) -> None:
+        """Export a tab's chat to a Markdown file."""
+        tab_id = self._tab_id_at_index(index)
+        if tab_id is None:
+            return
+        session = self._ctrl._sessions.get(tab_id)
+        if session is None or not session.messages:
+            return
+        label = self._ctrl.tab_label(tab_id).replace("/", "-").replace("\\", "-")
+        default_name = f"rikugan-{label}-{time.strftime('%Y%m%d-%H%M%S')}.md"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Chat", default_name,
+            "Markdown (*.md);;Text (*.txt);;All Files (*)",
+        )
+        if not path:
+            return
+        try:
+            self._export_session_to_file(session, path)
+            log_info(f"Exported chat to {path}")
+        except Exception as e:
+            log_error(f"Failed to export chat: {e}")
+
+    @staticmethod
+    def _export_session_to_file(session, path: str) -> None:
+        """Write session messages to a Markdown file."""
+        import json as _json
+        from ..core.types import Role
+
+        import re as _re
+
+        def _detect_lang(text: str, tool_name: str = "", arg_key: str = "") -> str:
+            """Detect language from content heuristics and tool/arg context."""
+            # Argument key hints
+            if arg_key in ("code", "python"):
+                return "python"
+            if arg_key in ("c_code", "c_declaration", "prototype"):
+                return "c"
+
+            # Tool name hints (checked before content — fast path)
+            _TOOL_LANG = {
+                "execute_python": "python",
+                "decompile_function": "c",
+                "get_il": "c",
+                "declare_c_type": "c",
+                "define_types": "c",
+                "set_function_prototype": "c",
+                "fetch_disassembly": "x86asm",
+            }
+            if tool_name in _TOOL_LANG:
+                return _TOOL_LANG[tool_name]
+
+            # Content-based detection
+            sample = text[:2000]
+
+            # Hexdump pattern: addresses with hex bytes
+            if _re.search(r"^[0-9a-fA-F]{8,16}\s+([0-9a-fA-F]{2}\s+){4,}", sample, _re.M):
+                return "text"
+
+            # Assembly: mnemonics at line starts or after addresses
+            asm_pat = r"(?:mov|lea|push|pop|call|ret|jmp|je|jne|jz|jnz|cmp|test|xor|add|sub|nop|int)\s"
+            if _re.search(asm_pat, sample, _re.I) and _re.search(r"0x[0-9a-fA-F]+", sample):
+                return "x86asm"
+
+            # C-like: decompiled output with types, braces, semicolons
+            c_indicators = 0
+            if _re.search(r"\b(void|int|char|uint\d+_t|int\d+_t|struct|enum|typedef)\b", sample):
+                c_indicators += 1
+            if _re.search(r"[{};]", sample):
+                c_indicators += 1
+            if _re.search(r"\b(if|while|for|return|switch)\s*\(", sample):
+                c_indicators += 1
+            if c_indicators >= 2:
+                return "c"
+
+            # Python: def/import/class patterns
+            if _re.search(r"^(def |class |import |from .+ import |print\()", sample, _re.M):
+                return "python"
+
+            return ""
+
+        def _format_tool_args(tc) -> str:
+            """Format tool call arguments with proper code blocks."""
+            parts = []
+            for k, v in tc.arguments.items():
+                if isinstance(v, str) and ("\n" in v or len(v) > 80):
+                    lang = _detect_lang(v, tc.name, k)
+                    parts.append(f"  - `{k}`:\n\n```{lang}\n{v}\n```\n")
+                else:
+                    parts.append(f"  - `{k}`: `{v!r}`")
+            return "\n".join(parts)
+
+        def _format_tool_result(tr) -> str:
+            """Format tool result content with syntax highlighting."""
+            content = tr.content
+            if len(content) > 2000:
+                content = content[:2000] + "\n... (truncated)"
+            lang = _detect_lang(content, tr.name)
+            return f"```{lang}\n{content}\n```"
+
+        lines = ["# Rikugan Chat Export\n"]
+        lines.append(f"- **Model**: {session.model_name or 'unknown'}")
+        lines.append(f"- **Exported**: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        if session.idb_path:
+            lines.append(f"- **File**: `{os.path.basename(session.idb_path)}`")
+        lines.append("")
+        lines.append("---\n")
+        for msg in session.messages:
+            if msg.role == Role.USER:
+                lines.append(f"## You\n\n{msg.content}\n")
+            elif msg.role == Role.ASSISTANT:
+                if msg.content:
+                    lines.append(f"## Rikugan\n\n{msg.content}\n")
+                for tc in msg.tool_calls:
+                    lines.append(f"**Tool call**: `{tc.name}`\n")
+                    lines.append(_format_tool_args(tc))
+                    lines.append("")
+            elif msg.role == Role.TOOL:
+                for tr in msg.tool_results:
+                    status = "Error" if tr.is_error else "Result"
+                    lines.append(f"**{status}** (`{tr.name}`):\n")
+                    lines.append(_format_tool_result(tr))
+                    lines.append("")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+    def _on_export_current(self) -> None:
+        """Export the currently active tab's chat."""
+        index = self._tab_widget.currentIndex()
+        if index >= 0:
+            self._on_export_tab(index)
+
     def _on_tab_changed(self, index: int) -> None:
         """Handle tab switch."""
         if index < 0 or self._is_shutdown:
@@ -245,8 +400,9 @@ class RikuganPanelCore(QWidget):
         if tab_id is None:
             return
         self._ctrl.switch_tab(tab_id)
-        session = self._ctrl.session
-        self._context_bar.set_tokens(session.total_usage.total_tokens)
+        if self._context_bar is not None:
+            session = self._ctrl.session
+            self._context_bar.set_tokens(session.total_usage.total_tokens)
 
     def _tab_id_at_index(self, index: int) -> Optional[str]:
         """Find the tab_id for a given tab index by matching the widget."""
@@ -348,6 +504,10 @@ class RikuganPanelCore(QWidget):
         if self._is_shutdown:
             return
         self._ctrl.cancel()
+        # Remove [queued] widgets from the active chat view
+        chat_view = self._active_chat_view()
+        if chat_view is not None:
+            chat_view.remove_queued_messages()
 
     def _on_settings(self) -> None:
         try:
@@ -436,16 +596,28 @@ class RikuganPanelCore(QWidget):
             self._pending_answer = True
             self._set_running(False)
 
+    def _on_tool_approval(self, tool_call_id: str, decision: str) -> None:
+        """Forward tool approval to the agent loop."""
+        runner = self._ctrl.get_runner()
+        if runner:
+            runner.agent_loop.submit_tool_approval(decision)
+
     def _on_agent_finished(self) -> None:
         if self._is_shutdown:
             return
         if self._poll_timer:
             self._poll_timer.stop()
-        self._set_running(False)
 
         next_msg = self._ctrl.on_agent_finished()
         if next_msg:
+            # Queued message ready — submit immediately without toggling
+            # input off/on. _start_agent calls _set_running(True) internally.
+            chat_view = self._active_chat_view()
+            if chat_view is not None:
+                chat_view.pop_first_queued_message()
             self._start_agent(next_msg)
+        else:
+            self._set_running(False)
 
     def _try_restore_session(self) -> None:
         restored = self._ctrl.restore_sessions()

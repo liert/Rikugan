@@ -64,7 +64,7 @@ else
 fi
 
 PLUGINS_DIR="$IDA_USER_DIR/plugins"
-CONFIG_DIR="$IDA_USER_DIR/iris"
+CONFIG_DIR="$IDA_USER_DIR/rikugan"
 
 # ── Sanity checks ─────────────────────────────────────────────────────
 
@@ -73,8 +73,8 @@ if [[ ! -f "$SCRIPT_DIR/rikugan_plugin.py" ]]; then
     exit 1
 fi
 
-if [[ ! -d "$SCRIPT_DIR/iris" ]]; then
-    err "iris/ package not found in $SCRIPT_DIR — run this from the repo root"
+if [[ ! -d "$SCRIPT_DIR/rikugan" ]]; then
+    err "rikugan/ package not found in $SCRIPT_DIR — run this from the repo root"
     exit 1
 fi
 
@@ -115,7 +115,7 @@ mkdir -p "$CONFIG_DIR"
 # ── Copy built-in skills ──────────────────────────────────────────────
 
 SKILLS_DIR="$CONFIG_DIR/skills"
-BUILTINS_SRC="$SCRIPT_DIR/iris/skills/builtins"
+BUILTINS_SRC="$SCRIPT_DIR/rikugan/skills/builtins"
 
 if [[ -d "$BUILTINS_SRC" ]]; then
     info "Installing built-in skills into $SKILLS_DIR..."
@@ -159,14 +159,14 @@ install_link() {
 
 info "Installing Rikugan into $PLUGINS_DIR..."
 install_link "$SCRIPT_DIR/rikugan_plugin.py" "$PLUGINS_DIR/rikugan_plugin.py" "rikugan_plugin.py"
-install_link "$SCRIPT_DIR/iris"           "$PLUGINS_DIR/iris"           "iris/"
+install_link "$SCRIPT_DIR/rikugan"        "$PLUGINS_DIR/rikugan"        "rikugan/"
 
 # ── Done ──────────────────────────────────────────────────────────────
 
 echo ""
 ok "Rikugan installed successfully!"
 info "Plugin:  $PLUGINS_DIR/rikugan_plugin.py"
-info "Package: $PLUGINS_DIR/iris"
+info "Package: $PLUGINS_DIR/rikugan"
 info "Config:  $CONFIG_DIR/"
 info "Skills:  $SKILLS_DIR/"
 echo ""

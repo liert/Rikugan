@@ -11,8 +11,8 @@ except Exception:  # pragma: no cover - loaded only in Binary Ninja runtime
     bn = None
 
 if bn is not None:
-    # Binary Ninja loads this file as part of package "iris" (plugin folder
-    # name). Use relative imports to reach the framework package at ./iris/.
+    # Binary Ninja loads this file as part of the plugin package.
+    # Use relative imports to reach the framework package at ./rikugan/.
     from .rikugan.core.host import set_binary_ninja_context
     from .rikugan.binja.ui.actions import ACTION_DEFS, build_context
     from .rikugan.binja.ui.panel import RikuganPanel

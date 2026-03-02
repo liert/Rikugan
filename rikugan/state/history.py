@@ -85,9 +85,14 @@ class SessionHistory:
                     "messages": len(data.get("messages", [])),
                     "description": data.get("description", ""),
                 }
-                # Filter by IDB path if specified
-                if idb_path and entry["idb_path"] and entry["idb_path"] != idb_path:
-                    continue
+                # Strict filter: only return sessions matching the exact idb_path
+                if idb_path:
+                    if entry["idb_path"] != idb_path:
+                        continue
+                else:
+                    # No idb_path given — only return sessions with no idb_path
+                    if entry["idb_path"]:
+                        continue
                 sessions.append(entry)
             except (json.JSONDecodeError, OSError) as exc:
                 log_debug(f"Skipping corrupt session file {fname}: {exc}")

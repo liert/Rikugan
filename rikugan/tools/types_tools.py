@@ -545,14 +545,26 @@ def get_type_libraries() -> str:
     """List loaded type libraries (TILs)."""
 
     lines = ["Type libraries:"]
-    ti = ida_typeinf.get_idati()
-    count = ida_typeinf.get_idati_qty()
-    for i in range(count):
-        til = ida_typeinf.get_idati_entry(i)
-        if til:
-            name = ida_typeinf.get_til_name(til)
-            desc = ida_typeinf.get_til_desc(til)
-            lines.append(f"  {name}" + (f" - {desc}" if desc else ""))
+    try:
+        ti = ida_typeinf.get_idati()
+        if ti is None:
+            return "Type libraries: (unavailable)"
+        # IDA 9.x: iterate loaded TILs via til_t.base[]
+        count = ti.nbases
+        for i in range(count):
+            til = ti.base(i)
+            if til:
+                name = getattr(til, "name", None) or "(unnamed)"
+                desc = getattr(til, "desc", "") or ""
+                lines.append(f"  {name}" + (f" - {desc}" if desc else ""))
+    except (AttributeError, TypeError):
+        # Fallback: just report the main TIL name
+        try:
+            ti = ida_typeinf.get_idati()
+            name = getattr(ti, "name", "(unknown)")
+            lines.append(f"  {name} (main)")
+        except Exception:
+            lines.append("  (enumeration not supported in this IDA version)")
 
     return "\n".join(lines)
 

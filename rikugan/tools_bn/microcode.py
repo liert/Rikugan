@@ -1,4 +1,4 @@
-"""Backward-compat shim — canonical location: iris.binja.tools.il.
+"""Backward-compat shim — canonical location: rikugan.binja.tools.il.
 
 The il module was renamed from microcode to use proper Binary Ninja terminology.
 Old tool names (get_microcode, etc.) are still available as aliases.

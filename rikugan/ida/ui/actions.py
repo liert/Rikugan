@@ -177,7 +177,7 @@ if _HAS_IDA:
 
     _ACTION_DEFS: List[Tuple[str, str, Callable, bool, str, str, Set[str]]] = [
         (
-            "iris:send_to",
+            "rikugan:send_to",
             "Send to Rikugan",
             _handle_send_to, False,
             "Ctrl+Shift+A",
@@ -185,7 +185,7 @@ if _HAS_IDA:
             {"disasm", "pseudo"},
         ),
         (
-            "iris:explain",
+            "rikugan:explain",
             "Explain this",
             _handle_explain, True,
             "",
@@ -193,7 +193,7 @@ if _HAS_IDA:
             {"disasm", "pseudo"},
         ),
         (
-            "iris:rename",
+            "rikugan:rename",
             "Rename with Rikugan",
             _handle_rename, True,
             "",
@@ -201,7 +201,7 @@ if _HAS_IDA:
             {"disasm", "pseudo"},
         ),
         (
-            "iris:deobfuscate",
+            "rikugan:deobfuscate",
             "Deobfuscate with Rikugan",
             _handle_deobfuscate, True,
             "",
@@ -209,7 +209,7 @@ if _HAS_IDA:
             {"disasm", "pseudo"},
         ),
         (
-            "iris:vuln_audit",
+            "rikugan:vuln_audit",
             "Find vulnerabilities",
             _handle_vuln_audit, True,
             "",
@@ -217,7 +217,7 @@ if _HAS_IDA:
             {"disasm", "pseudo"},
         ),
         (
-            "iris:suggest_types",
+            "rikugan:suggest_types",
             "Suggest types",
             _handle_suggest_types, True,
             "",
@@ -225,7 +225,7 @@ if _HAS_IDA:
             {"disasm", "pseudo"},
         ),
         (
-            "iris:annotate",
+            "rikugan:annotate",
             "Annotate function",
             _handle_annotate, True,
             "",
@@ -233,7 +233,7 @@ if _HAS_IDA:
             {"pseudo"},
         ),
         (
-            "iris:clean_mcode",
+            "rikugan:clean_mcode",
             "Clean microcode",
             _handle_clean_mcode, True,
             "",
@@ -241,7 +241,7 @@ if _HAS_IDA:
             {"pseudo"},
         ),
         (
-            "iris:xref_analysis",
+            "rikugan:xref_analysis",
             "Xref analysis",
             _handle_xref_analysis, True,
             "",

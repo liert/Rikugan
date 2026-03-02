@@ -38,7 +38,7 @@ if not defined BN_USER_DIR (
 )
 
 set "PLUGINS_DIR=%BN_USER_DIR%\plugins"
-set "CONFIG_DIR=%BN_USER_DIR%\iris"
+set "CONFIG_DIR=%BN_USER_DIR%\rikugan"
 set "SKILLS_DIR=%CONFIG_DIR%\skills"
 
 echo [*] Installing Python dependencies...
@@ -87,7 +87,7 @@ exit /b 1
 if not exist "%PLUGINS_DIR%\" mkdir "%PLUGINS_DIR%"
 if not exist "%SKILLS_DIR%\" mkdir "%SKILLS_DIR%"
 
-set "BUILTINS_SRC=%SCRIPT_DIR%\iris\skills\builtins"
+set "BUILTINS_SRC=%SCRIPT_DIR%\rikugan\skills\builtins"
 if exist "%BUILTINS_SRC%\" (
     echo [*] Installing built-in skills into %SKILLS_DIR%...
     for /d %%S in ("%BUILTINS_SRC%\*") do (
@@ -101,14 +101,14 @@ if exist "%BUILTINS_SRC%\" (
     )
 )
 
-set "PLUGIN_LINK=%PLUGINS_DIR%\iris"
+set "PLUGIN_LINK=%PLUGINS_DIR%\rikugan"
 if exist "%PLUGIN_LINK%\" (
     fsutil reparsepoint query "%PLUGIN_LINK%" >nul 2>&1
     if !errorlevel! equ 0 (
         rmdir "%PLUGIN_LINK%"
     ) else (
-        if exist "%PLUGINS_DIR%\iris.bak\" rmdir /s /q "%PLUGINS_DIR%\iris.bak"
-        ren "%PLUGIN_LINK%" "iris.bak"
+        if exist "%PLUGINS_DIR%\rikugan.bak\" rmdir /s /q "%PLUGINS_DIR%\rikugan.bak"
+        ren "%PLUGIN_LINK%" "rikugan.bak"
     )
 )
 

@@ -25,6 +25,7 @@ class TurnEventType(str, Enum):
     PLAN_GENERATED = "plan_generated"
     PLAN_STEP_START = "plan_step_start"
     PLAN_STEP_DONE = "plan_step_done"
+    TOOL_APPROVAL_REQUEST = "tool_approval_request"
 
 
 @dataclass
@@ -126,4 +127,14 @@ class TurnEvent:
         return TurnEvent(
             type=TurnEventType.PLAN_STEP_DONE,
             plan_step_index=index, text=result,
+        )
+
+    @staticmethod
+    def tool_approval_request(
+        tool_call_id: str, tool_name: str, args: str, description: str,
+    ) -> "TurnEvent":
+        return TurnEvent(
+            type=TurnEventType.TOOL_APPROVAL_REQUEST,
+            tool_call_id=tool_call_id, tool_name=tool_name, tool_args=args,
+            text=description,
         )

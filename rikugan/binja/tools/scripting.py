@@ -5,10 +5,23 @@ from __future__ import annotations
 import contextlib
 import importlib
 import io
+import re
 from typing import Annotated
 
 from ...tools.base import tool
 from .common import current_ea_or_default, require_bv
+
+# Patterns that indicate process execution — blocked for safety.
+_BLOCKED_PATTERNS = [
+    r"\bsubprocess\b",
+    r"\bos\.system\s*\(",
+    r"\bos\.popen\s*\(",
+    r"\bos\.exec\w*\s*\(",
+    r"\bos\.spawn\w*\s*\(",
+    r"\bPopen\s*\(",
+    r"\b__import__\s*\(\s*['\"]subprocess['\"]\s*\)",
+]
+_BLOCKED_RE = re.compile("|".join(_BLOCKED_PATTERNS))
 
 _BN_MODULE_NAMES = (
     "binaryninja",
@@ -46,6 +59,11 @@ def execute_python(
     The code runs with access to `binaryninja`, `binaryninjaui`, `bv`, and
     `current_address`.
     """
+    # Block process-execution patterns (subprocess, os.system, etc.)
+    match = _BLOCKED_RE.search(code)
+    if match:
+        return f"Error: Blocked — code contains disallowed process execution: '{match.group()}'"
+
     stdout_buf = io.StringIO()
     stderr_buf = io.StringIO()
     namespace = _get_base_namespace()

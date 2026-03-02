@@ -6,11 +6,15 @@ import json
 import random
 from typing import Dict, List, Optional
 
+import re as _re
+
 from .qt_compat import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QToolButton,
-    QWidget, QSizePolicy, Qt, Signal, QTimer,
+    QWidget, QSizePolicy, Qt, Signal, QTimer, QPlainTextEdit,
 )
 from .markdown import md_to_html
+
+from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 
 _MAX_ARGS_DISPLAY = 2000
 _MAX_RESULT_DISPLAY = 3000
@@ -802,6 +806,181 @@ class UserQuestionWidget(QFrame):
             hint = QLabel("Type your answer or a number to choose an option.")
             hint.setStyleSheet("color: #808080; font-size: 10px; font-style: italic;")
             layout.addWidget(hint)
+
+
+class _PythonHighlighter(QSyntaxHighlighter):
+    """Minimal VS Code-dark-style Python syntax highlighter."""
+
+    _RULES = []  # built once in __init_subclass__ — see below
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        if not _PythonHighlighter._RULES:
+            _PythonHighlighter._RULES = self._build_rules()
+
+    @staticmethod
+    def _fmt(color: str, bold: bool = False, italic: bool = False) -> QTextCharFormat:
+        f = QTextCharFormat()
+        f.setForeground(QColor(color))
+        if bold:
+            f.setFontWeight(QFont.Weight.Bold)
+        if italic:
+            f.setFontItalic(True)
+        return f
+
+    @staticmethod
+    def _build_rules():
+        rules = []
+        kw_fmt = _PythonHighlighter._fmt("#c586c0", bold=True)
+        for kw in (
+            "and", "as", "assert", "async", "await", "break", "class",
+            "continue", "def", "del", "elif", "else", "except", "finally",
+            "for", "from", "global", "if", "import", "in", "is", "lambda",
+            "nonlocal", "not", "or", "pass", "raise", "return", "try",
+            "while", "with", "yield",
+        ):
+            rules.append((_re.compile(rf"\b{kw}\b"), kw_fmt))
+        # Built-ins
+        bi_fmt = _PythonHighlighter._fmt("#dcdcaa")
+        for bi in ("print", "len", "range", "int", "str", "bytes", "list",
+                    "dict", "set", "tuple", "hex", "ord", "chr", "type",
+                    "isinstance", "enumerate", "zip", "map", "filter",
+                    "sorted", "open", "True", "False", "None"):
+            rules.append((_re.compile(rf"\b{bi}\b"), bi_fmt))
+        # Numbers
+        rules.append((_re.compile(r"\b0[xX][0-9a-fA-F]+\b"), _PythonHighlighter._fmt("#b5cea8")))
+        rules.append((_re.compile(r"\b\d+\.?\d*\b"), _PythonHighlighter._fmt("#b5cea8")))
+        # Strings (single/double, including f/r/b prefixes)
+        str_fmt = _PythonHighlighter._fmt("#ce9178")
+        rules.append((_re.compile(r'[brfu]?""".*?"""', _re.DOTALL), str_fmt))
+        rules.append((_re.compile(r"[brfu]?'''.*?'''", _re.DOTALL), str_fmt))
+        rules.append((_re.compile(r'[brfu]?"[^"\n]*"'), str_fmt))
+        rules.append((_re.compile(r"[brfu]?'[^'\n]*'"), str_fmt))
+        # Comments
+        rules.append((_re.compile(r"#[^\n]*"), _PythonHighlighter._fmt("#6a9955", italic=True)))
+        # Decorators
+        rules.append((_re.compile(r"@\w+"), _PythonHighlighter._fmt("#dcdcaa")))
+        # self
+        rules.append((_re.compile(r"\bself\b"), _PythonHighlighter._fmt("#9cdcfe", italic=True)))
+        return rules
+
+    def highlightBlock(self, text: str) -> None:
+        for pattern, fmt in _PythonHighlighter._RULES:
+            for m in pattern.finditer(text):
+                self.setFormat(m.start(), m.end() - m.start(), fmt)
+
+
+class ToolApprovalWidget(QFrame):
+    """Displays a tool approval request with syntax-highlighted code preview."""
+
+    approved = Signal(str, str)   # (tool_call_id, "allow" or "deny")
+
+    def __init__(
+        self, tool_call_id: str, tool_name: str, args_text: str,
+        description: str, parent: QWidget = None,
+    ):
+        super().__init__(parent)
+        self.setObjectName("message_question")
+        self.setStyleSheet(
+            "QFrame#message_question { border: 1px solid #dcdcaa; "
+            "border-radius: 6px; background: #2d2d1e; }"
+        )
+        self._tool_call_id = tool_call_id
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+
+        # Header
+        header = QLabel("Approve execute_python?")
+        header.setStyleSheet("color: #dcdcaa; font-weight: bold; font-size: 11px;")
+        layout.addWidget(header)
+
+        # Extract actual code from the JSON args
+        code = ""
+        try:
+            args = json.loads(args_text) if args_text.strip() else {}
+            code = args.get("code", args.get("script", ""))
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            code = args_text  # fallback to raw text
+
+        # Line count info
+        lines = code.strip().splitlines() if code.strip() else []
+        info = QLabel(f"Python code — {len(lines)} line{'s' if len(lines) != 1 else ''}")
+        info.setStyleSheet("color: #808080; font-size: 10px;")
+        layout.addWidget(info)
+
+        # Scrollable, copyable, syntax-highlighted code editor (read-only)
+        if code.strip():
+            self._code_edit = QPlainTextEdit()
+            self._code_edit.setReadOnly(True)
+            self._code_edit.setPlainText(code)
+            self._code_edit.setStyleSheet(
+                "QPlainTextEdit { "
+                "  color: #d4d4d4; background: #1e1e2e; "
+                "  font-family: 'Consolas', 'Monaco', 'Courier New', monospace; "
+                "  font-size: 11px; border: 1px solid #3c3c3c; border-radius: 4px; "
+                "  padding: 4px; "
+                "}"
+                "QScrollBar:vertical { width: 8px; background: #1e1e2e; }"
+                "QScrollBar::handle:vertical { background: #3c3c3c; border-radius: 4px; }"
+                "QScrollBar:horizontal { height: 8px; background: #1e1e2e; }"
+                "QScrollBar::handle:horizontal { background: #3c3c3c; border-radius: 4px; }"
+            )
+            self._code_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+            # Size: show up to 15 lines, then scroll
+            visible_lines = min(len(lines), 15)
+            line_height = self._code_edit.fontMetrics().lineSpacing()
+            self._code_edit.setFixedHeight(line_height * visible_lines + 16)
+            # Attach syntax highlighter
+            self._highlighter = _PythonHighlighter(self._code_edit.document())
+            layout.addWidget(self._code_edit)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
+
+        self._allow_btn = QToolButton()
+        self._allow_btn.setText("  Allow  ")
+        self._allow_btn.setStyleSheet(
+            "QToolButton { background: #2ea043; color: #ffffff; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
+            "QToolButton:hover { background: #3fb950; }"
+        )
+        self._allow_btn.clicked.connect(self._on_allow)
+        btn_layout.addWidget(self._allow_btn)
+
+        self._deny_btn = QToolButton()
+        self._deny_btn.setText("  Deny  ")
+        self._deny_btn.setStyleSheet(
+            "QToolButton { background: #c42b1c; color: #ffffff; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
+            "QToolButton:hover { background: #e04030; }"
+        )
+        self._deny_btn.clicked.connect(self._on_deny)
+        btn_layout.addWidget(self._deny_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+    def _on_allow(self):
+        self._allow_btn.setEnabled(False)
+        self._deny_btn.setEnabled(False)
+        self._allow_btn.setText("  Allowed  ")
+        self._allow_btn.setStyleSheet(
+            "QToolButton { background: #1a5c2d; color: #808080; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
+        )
+        self.approved.emit(self._tool_call_id, "allow")
+
+    def _on_deny(self):
+        self._allow_btn.setEnabled(False)
+        self._deny_btn.setEnabled(False)
+        self._deny_btn.setText("  Denied  ")
+        self._deny_btn.setStyleSheet(
+            "QToolButton { background: #6e1a12; color: #808080; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
+        )
+        self.approved.emit(self._tool_call_id, "deny")
 
 
 class ErrorMessageWidget(QFrame):

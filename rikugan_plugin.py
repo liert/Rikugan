@@ -1,7 +1,7 @@
 """Rikugan - Intelligent Reverse-engineering Integrated System.
 
 IDA Pro plugin entry point.
-All iris.* imports are deferred to avoid crashes during plugin enumeration.
+All rikugan.* imports are deferred to avoid crashes during plugin enumeration.
 """
 
 import builtins
@@ -74,7 +74,7 @@ class RikuganPlugmod(idaapi.plugmod_t):
                 self._panel.show()
                 return
 
-            # Bulk-load all iris.* modules via importlib.import_module().
+            # Bulk-load all rikugan.* modules via importlib.import_module().
             #
             # importlib.import_module() routes through CPython's internal
             # _gcd_import(), which does NOT call builtins.__import__.  This
@@ -83,11 +83,11 @@ class RikuganPlugmod(idaapi.plugmod_t):
             # spurious "No module named 'ida_...'" errors (from Shiboken's
             # hook failing to resolve IDA modules during bulk loading).
             #
-            # All ida_* imports inside iris modules also use
+            # All ida_* imports inside rikugan modules also use
             # importlib.import_module() for the same reason.
-            _log("_toggle_panel: importing iris modules")
+            _log("_toggle_panel: importing rikugan modules")
             import pkgutil
-            import iris
+            import rikugan
 
             # Use iter_modules (discovery only, no __import__) + manual
             # recursion via importlib.import_module().  pkgutil.walk_packages()
@@ -104,9 +104,9 @@ class RikuganPlugmod(idaapi.plugmod_t):
                     except Exception:
                         pass  # Non-critical: skip modules that fail to load
 
-            _load_submodules(iris)
-            _log("_toggle_panel: all iris modules loaded")
-            RikuganPanel = importlib.import_module("iris.ida.ui.panel").RikuganPanel
+            _load_submodules(rikugan)
+            _log("_toggle_panel: all rikugan modules loaded")
+            RikuganPanel = importlib.import_module("rikugan.ida.ui.panel").RikuganPanel
 
             _log("_toggle_panel: creating RikuganPanel()")
             self._panel = RikuganPanel()
@@ -119,13 +119,13 @@ class RikuganPlugmod(idaapi.plugmod_t):
             tb_str = traceback.format_exc()
             idaapi.msg(f"[Rikugan] Failed to open panel: {e}\n{tb_str}\n")
             try:
-                importlib.import_module("iris.core.logging").log_error(
+                importlib.import_module("rikugan.core.logging").log_error(
                     f"Failed to open panel: {e}\n{tb_str}"
                 )
             except Exception:
                 try:
                     import os
-                    log_path = os.path.join(os.path.expanduser("~"), ".idapro", "iris", "rikugan_debug.log")
+                    log_path = os.path.join(os.path.expanduser("~"), ".idapro", "rikugan", "rikugan_debug.log")
                     with open(log_path, "a") as f:
                         f.write(f"[Rikugan CRASH] {e}\n{tb_str}\n")
                         f.flush()
@@ -150,7 +150,7 @@ def _log(msg: str) -> None:
     """Best-effort log to IDA output and debug file."""
     idaapi.msg(f"[Rikugan] {msg}\n")
     try:
-        importlib.import_module("iris.core.logging").log_trace(msg)
+        importlib.import_module("rikugan.core.logging").log_trace(msg)
     except Exception:
         pass  # noqa: S110 — logging not yet available during bootstrap
 

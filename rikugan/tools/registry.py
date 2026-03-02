@@ -121,7 +121,7 @@ class ToolRegistry:
 def create_default_registry() -> ToolRegistry:
     """Create a registry with all built-in IDA tools.
 
-    Backward-compat shim — canonical location is iris.ida.tools.registry.
+    Backward-compat shim — canonical location is rikugan.ida.tools.registry.
     """
     from ..ida.tools.registry import create_default_registry as _create
     return _create()

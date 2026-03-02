@@ -68,6 +68,10 @@ class AgentLoop:
         self._user_answer: Optional[str] = None
         self.plan_mode = False
 
+        # Tool approval state (for execute_python)
+        self._tool_approval_event = threading.Event()
+        self._tool_approved: Optional[str] = None  # "allow" or "deny"
+
     @property
     def is_running(self) -> bool:
         return self._running
@@ -80,6 +84,11 @@ class AgentLoop:
         """Submit an answer to an ask_user question (called from UI thread)."""
         self._user_answer = answer
         self._user_answer_event.set()
+
+    def submit_tool_approval(self, decision: str) -> None:
+        """Submit tool approval decision: 'allow', 'allow_all', or 'deny'."""
+        self._tool_approved = decision
+        self._tool_approval_event.set()
 
     def _check_cancelled(self) -> None:
         if self._cancelled.is_set():
@@ -307,6 +316,57 @@ class AgentLoop:
         log_debug(f"Stream done: {chunk_count} chunks, {len(assistant_text)} chars, {len(tool_calls)} tool calls")
         return (assistant_text, tool_calls, last_usage)
 
+    @staticmethod
+    def _describe_tool_call(name: str, args: Dict[str, Any]) -> str:
+        """Generate a brief human-readable description of what a tool will do."""
+        if name == "execute_python":
+            code = args.get("code", args.get("script", ""))
+            lines = code.strip().splitlines()
+            if len(lines) <= 3:
+                return f"Run Python code:\n{code.strip()}"
+            preview = "\n".join(lines[:3])
+            return f"Run Python code ({len(lines)} lines):\n{preview}\n..."
+        if name in ("rename_function",):
+            return f"Rename function {args.get('old_name', '?')} → {args.get('new_name', '?')}"
+        if name in ("rename_variable", "rename_single_variable"):
+            return f"Rename variable {args.get('variable_name', '?')} → {args.get('new_name', '?')}"
+        if name in ("set_comment", "set_function_comment"):
+            return f"Set comment at {args.get('address', args.get('function_name', '?'))}"
+        if name in ("set_type", "set_function_prototype"):
+            return f"Set type at {args.get('ea', args.get('name_or_address', '?'))}"
+        if name in ("nop_microcode", "nop_instructions"):
+            return f"NOP instructions at {args.get('address', args.get('ea', '?'))}"
+        if name in ("create_struct", "create_enum"):
+            return f"Create {name.split('_')[1]} '{args.get('name', '?')}'"
+        if name in ("decompile_function", "fetch_disassembly"):
+            return f"Decompile/disassemble {args.get('name', args.get('address', '?'))}"
+        # Generic
+        summary_parts = []
+        for k in ("name", "address", "ea", "target", "query"):
+            if k in args:
+                summary_parts.append(f"{k}={args[k]}")
+                break
+        return f"Call {name}({', '.join(summary_parts)})" if summary_parts else f"Call {name}"
+
+    def _wait_for_approval(
+        self, tc: ToolCall,
+    ) -> Generator[TurnEvent, None, bool]:
+        """Yield an approval request and wait for the user decision.
+
+        Returns True if approved, False if denied.
+        """
+        args_str = json.dumps(tc.arguments, indent=2)
+        description = self._describe_tool_call(tc.name, tc.arguments)
+        yield TurnEvent.tool_approval_request(tc.id, tc.name, args_str, description)
+
+        self._tool_approval_event.clear()
+        self._tool_approved = None
+        while not self._tool_approval_event.wait(0.5):
+            self._check_cancelled()
+
+        decision = (self._tool_approved or "deny").lower()
+        return decision == "allow"
+
     def _execute_tool_calls(
         self, tool_calls: List[ToolCall],
     ) -> Generator[TurnEvent, None, List[ToolResult]]:
@@ -334,6 +394,18 @@ class AgentLoop:
                 tool_results.append(tr)
                 yield TurnEvent.tool_result_event(tc.id, tc.name, tr.content, False)
                 continue
+
+            # Tool approval gate — execute_python always needs explicit approval
+            if tc.name == "execute_python":
+                approved = yield from self._wait_for_approval(tc)
+                if not approved:
+                    tr = ToolResult(
+                        tool_call_id=tc.id, name=tc.name,
+                        content="Tool execution denied by user.", is_error=True,
+                    )
+                    tool_results.append(tr)
+                    yield TurnEvent.tool_result_event(tc.id, tc.name, tr.content, True)
+                    continue
 
             log_debug(f"Executing tool {tc.name}")
             try:
