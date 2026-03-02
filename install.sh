@@ -80,17 +80,31 @@ fi
 
 # ── Install dependencies ──────────────────────────────────────────────
 
-info "Installing Python dependencies..."
-if command -v pip3 &>/dev/null; then
-    pip3 install -r "$SCRIPT_DIR/requirements.txt" --quiet 2>&1 || {
-        warn "pip3 install failed — you may need to install dependencies manually"
-    }
-elif command -v pip &>/dev/null; then
-    pip install -r "$SCRIPT_DIR/requirements.txt" --quiet 2>&1 || {
-        warn "pip install failed — you may need to install dependencies manually"
-    }
-else
-    warn "pip not found — install dependencies manually: pip install -r requirements.txt"
+install_requirements() {
+    local req="$SCRIPT_DIR/requirements.txt"
+    local candidates=(
+        "python3 -m pip"
+        "python -m pip"
+        "pip3"
+        "pip"
+    )
+
+    for cmd in "${candidates[@]}"; do
+        if eval "$cmd --version" >/dev/null 2>&1; then
+            info "Installing Python dependencies with: $cmd"
+            if eval "$cmd install --break-system-packages -r \"$req\""; then
+                ok "Dependencies installed successfully"
+                return 0
+            fi
+            warn "Dependency install failed with: $cmd"
+        fi
+    done
+    return 1
+}
+
+if ! install_requirements; then
+    err "Failed to install Python dependencies from requirements.txt"
+    exit 1
 fi
 
 # ── Create directories ────────────────────────────────────────────────
@@ -158,3 +172,4 @@ info "Skills:  $SKILLS_DIR/"
 echo ""
 info "Open IDA and press Ctrl+Shift+I to start Iris."
 info "First run: click Settings to configure your LLM provider and API key."
+info "For Binary Ninja installation, run: ./install_binaryninja.sh"

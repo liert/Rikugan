@@ -51,12 +51,14 @@ class AgentLoop:
         config: IRISConfig,
         session: SessionState,
         skill_registry: Optional[SkillRegistry] = None,
+        host_name: str = "IDA Pro",
     ):
         self.provider = provider
         self.tools = tool_registry
         self.config = config
         self.session = session
         self.skills = skill_registry
+        self.host_name = host_name
         self._cancelled = threading.Event()
         self._running = False
         self._consecutive_errors = 0
@@ -104,6 +106,7 @@ class AgentLoop:
             skill_summary = self.skills.get_summary_for_prompt()
 
         return build_system_prompt(
+            host_name=self.host_name,
             binary_info=binary_info,
             current_function=current_function,
             current_address=current_address,

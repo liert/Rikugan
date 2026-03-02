@@ -58,23 +58,26 @@ set "CONFIG_DIR=%IDA_USER_DIR%\iris"
 :: ── Install dependencies ─────────────────────────────────────────────
 
 echo [*] Installing Python dependencies...
-where pip3 >nul 2>&1
-if !errorlevel! equ 0 (
-    pip3 install -r "%SCRIPT_DIR%\requirements.txt" --quiet 2>nul
-    if !errorlevel! neq 0 (
-        echo [!] pip3 install failed — you may need to install dependencies manually
-    )
-) else (
-    where pip >nul 2>&1
-    if !errorlevel! equ 0 (
-        pip install -r "%SCRIPT_DIR%\requirements.txt" --quiet 2>nul
-        if !errorlevel! neq 0 (
-            echo [!] pip install failed — you may need to install dependencies manually
-        )
-    ) else (
-        echo [!] pip not found — install dependencies manually: pip install -r requirements.txt
-    )
-)
+set "PIP_CMD=py -3 -m pip"
+call :try_install_requirements
+if !errorlevel! equ 0 goto deps_ok
+set "PIP_CMD=python3 -m pip"
+call :try_install_requirements
+if !errorlevel! equ 0 goto deps_ok
+set "PIP_CMD=python -m pip"
+call :try_install_requirements
+if !errorlevel! equ 0 goto deps_ok
+set "PIP_CMD=pip3"
+call :try_install_requirements
+if !errorlevel! equ 0 goto deps_ok
+set "PIP_CMD=pip"
+call :try_install_requirements
+if !errorlevel! equ 0 goto deps_ok
+
+echo [-] Failed to install Python dependencies from requirements.txt
+exit /b 1
+
+:deps_ok
 
 :: ── Create directories ───────────────────────────────────────────────
 
@@ -158,5 +161,19 @@ echo [*] Skills:  %SKILLS_DIR%\
 echo.
 echo [*] Open IDA and press Ctrl+Shift+I to start Iris.
 echo [*] First run: click Settings to configure your LLM provider and API key.
+echo [*] For Binary Ninja installation, run install_binaryninja.bat
 
 endlocal
+exit /b 0
+
+:try_install_requirements
+cmd /c "%PIP_CMD% --version" >nul 2>&1
+if errorlevel 1 exit /b 1
+echo [*] Installing dependencies with %PIP_CMD%
+cmd /c "%PIP_CMD% install --break-system-packages -r \"%SCRIPT_DIR%\requirements.txt\""
+if errorlevel 1 (
+    echo [!] Dependency install failed with %PIP_CMD%
+    exit /b 1
+)
+echo [+] Dependencies installed successfully
+exit /b 0

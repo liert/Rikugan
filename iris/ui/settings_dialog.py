@@ -116,7 +116,14 @@ class SettingsDialog(QDialog):
         self._shown = False
         self._closed = False
         self.setWindowTitle("IRIS Settings")
-        self.setMinimumWidth(500)
+        from .qt_compat import QApplication
+        screen = QApplication.primaryScreen()
+        if screen:
+            avail = screen.availableGeometry()
+            self.resize(min(int(avail.width() * 0.45), 900), min(int(avail.height() * 0.7), 800))
+        else:
+            self.resize(700, 600)
+        self.setMinimumWidth(400)
         self._build_ui()
 
         # Poll timer for fetcher results — NO cross-thread signals
@@ -182,6 +189,7 @@ class SettingsDialog(QDialog):
 
         self._model_status = QLabel()
         self._model_status.setStyleSheet("color: #808080; font-size: 10px;")
+        self._model_status.setWordWrap(True)
         model_layout.addWidget(self._model_status)
 
         provider_form.addRow("Model:", model_layout)
@@ -399,8 +407,7 @@ class SettingsDialog(QDialog):
 
     def _on_fetch_error(self, error: str) -> None:
         self._fetch_btn.setEnabled(True)
-        short = error[:60] + "..." if len(error) > 60 else error
-        self._model_status.setText(short)
+        self._model_status.setText(error)
         self._model_status.setStyleSheet("color: #f44747; font-size: 10px;")
 
     def _update_generation_defaults(self) -> None:

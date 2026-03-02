@@ -1,17 +1,17 @@
-# Iris — The IDA Pro companion
+# Iris — The IDA Pro + Binary Ninja companion
 
-An IDA Pro plugin that integrates a multi-provider LLM agent as a first-class reverse engineering companion. Iris provides an agentic loop with streaming, 57 purpose-built IDA tools, 7 built-in analysis skills, MCP client, and a native Qt chat panel, all accessible through a single hotkey.
+A reverse-engineering plugin for **IDA Pro and Binary Ninja** that integrates a multi-provider LLM agent directly in your analysis UI. Iris provides an agentic loop with streaming, 57 host-native tools, 7 built-in analysis skills, MCP client support, and a native Qt chat panel.
 
 This project was done together with my friend, Claude Code.
 
 
 ## Is this another MCP client?
 
-No, Iris is an agent built to live inside IDA Pro. It does not consume an MCP server to interact with IDA, it has its own agentic loop, context management, it's own role (you can check it [here](iris/agent/system_prompt.py) ) and tool orchestration layer running entirely in-process.
+No, Iris is an agent built to live inside your RE host (**IDA Pro or Binary Ninja**). It does not consume an MCP server to interact with the host database; it has its own agentic loop, context management, its own role prompt (you can check it [here](iris/agent/system_prompt.py)), and an in-process tool orchestration layer.
 
 The agent loop is a generator-based turn cycle: each user message kicks off a stream→execute→repeat pipeline where the LLM response is streamed token-by-token, tool calls are intercepted and dispatched.
 
-The results are fed back as the next turn's context. It supports automatic error recovery, mid-run user questions, plan mode for multi-step workflows, and message queuing, all without leaving IDA.
+The results are fed back as the next turn's context. It supports automatic error recovery, mid-run user questions, plan mode for multi-step workflows, and message queuing, all without leaving the disassembler.
 
 The agent really ***lives*** and ***breathes*** reversing.
 
@@ -29,48 +29,64 @@ Also, building agents is an amazing area of study, especially coding with them.
 
 ## Features
 
-- **57 IDA tools** — navigation, decompiler, disassembly, xrefs, strings, annotations, type engineering, microcode, scripting
+- **57 host-native tools** — navigation, decompiler, disassembly, xrefs, strings, annotations, type engineering, microcode/IL, scripting
 - **7 built-in skills** — malware analysis, deobfuscation, vulnerability audit, driver analysis, CTF solving, and more
 - **MCP client** — connect external MCP servers, their tools appear alongside built-in ones
-- **9 context menu actions** — right-click in disasm/pseudocode for instant analysis
+- **9 quick actions** — context-menu/command integration for instant analysis
 - **5 LLM providers** — Anthropic (Claude), OpenAI, Gemini, Ollama, OpenAI-compatible
 - **Message queuing** — send follow-up messages while the agent is working; they auto-submit when the current turn finishes
-- **Microcode tools** — read, NOP, and install custom optimizers at any Hex-Rays maturity level
-- **Session persistence** — auto-save/restore conversations across IDA restarts
+- **Microcode/IL tools** — Hex-Rays microcode in IDA, native IL tools (LLIL/MLIL/HLIL) in Binary Ninja
+- **Host-specific system prompts** — each host gets a tailored prompt with correct terminology
+- **Session persistence** — auto-save/restore conversations across host restarts
 
 ## Requirements
 
-- IDA Pro 9.0+ with Hex-Rays decompiler (recommended)
+- IDA Pro 9.0+ with Hex-Rays decompiler (recommended), or Binary Ninja (UI mode)
 - Python 3.9+ (3.14 is known to have problems with Qt)
 - At least one LLM provider
 
 
 ## Installation
 
-Clone this repository, then run the installer for your platform:
+Clone this repository, then run the installer for your target host:
 
-**Linux / macOS:**
+**IDA Pro (Linux / macOS):**
 ```bash
 ./install.sh
 ```
 
-**Windows:**
+**IDA Pro (Windows):**
 ```bat
 install.bat
 ```
 
-Both scripts auto-detect your IDA user directory. If detection fails (or you have a non-standard setup), pass the path explicitly:
+**Binary Ninja (Linux / macOS):**
+```bash
+./install_binaryninja.sh
+```
+
+**Binary Ninja (Windows):**
+```bat
+install_binaryninja.bat
+```
+
+All scripts auto-detect the user directory for their host. If detection fails (or you have a non-standard setup), pass the path explicitly:
 
 ```bash
 ./install.sh /path/to/ida/user/dir
 install.bat "C:\Users\you\AppData\Roaming\Hex-Rays\IDA Pro"
+./install_binaryninja.sh /path/to/binaryninja/user/dir
+install_binaryninja.bat "C:\Users\you\AppData\Roaming\Binary Ninja"
 ```
 
-The installer symlinks the plugin into your IDA plugins folder, installs pip dependencies, and creates the Iris config directory.
+Installers create plugin links/junctions, install dependencies, and initialize host-specific Iris config directories.
 
 ### Set your API key
 
-Iris has a settings dialog to configure your model of choice; it comes with predefined values. Open Iris → click Settings → paste your key. Keys are persisted to `~/.idapro/iris/config.json`.
+Iris has a settings dialog to configure your model of choice. Open Iris → click Settings → paste your key.
+
+- IDA config: `~/.idapro/iris/config.json`
+- Binary Ninja config: `~/.binaryninja/iris/config.json` (or platform-equivalent user dir)
 
 ![Settings dialog](assets/settings.png)
 
@@ -82,12 +98,13 @@ Iris has a settings dialog to configure your model of choice; it comes with pred
 
 ### Open the panel
 
-Press **Ctrl+Shift+I** or go to **Edit → Plugins → Iris**.
+IDA Pro: press **Ctrl+Shift+I** or go to **Edit → Plugins → Iris**.  
+Binary Ninja: use **Tools → IRIS → Open Panel**.
 
 ![Panel overview](assets/panel.png)
 
 
-Type a message and press **Enter** to send. Iris streams the response and executes IDA tools as needed.
+Type a message and press **Enter** to send. Iris streams the response and executes host tools as needed.
 
 - **Enter** — send message
 - **Shift+Enter** — newline
@@ -97,9 +114,10 @@ Type a message and press **Enter** to send. Iris streams the response and execut
 
 You can send messages while the agent is working. They appear as `[queued]` in the chat and auto-submit when the current turn finishes. Hit **Stop** to cancel the running turn and discard all queued messages.
 
-### Context menu
+### Quick actions
 
-Right-click in the disassembly or pseudocode view:
+IDA Pro exposes these under right-click menus.  
+Binary Ninja exposes equivalent commands under **Tools → IRIS** and address-context command menus.
 
 | Action | Views | Behavior |
 |--------|-------|----------|
@@ -110,17 +128,22 @@ Right-click in the disassembly or pseudocode view:
 | **Find vulnerabilities** | disasm, pseudo | Security audit |
 | **Suggest types** | disasm, pseudo | Infers types from usage patterns |
 | **Annotate function** | pseudo | Adds comments to decompiled code |
-| **Clean microcode** | pseudo | Identifies and NOPs junk microcode |
+| **Clean microcode / IL** | pseudo | Identifies and NOPs junk instructions |
 | **Xref analysis** | disasm, pseudo | Deep cross-reference tracing |
 
 ### Skills
 
 Skills are reusable analysis workflows. Type `/` in the input area to see available skills with autocomplete.
 
-Create custom skills in `~/.idapro/iris/skills/<slug>/SKILL.md`. Each skill lives in its own subdirectory.
+Create custom skills in:
+
+- IDA: `~/.idapro/iris/skills/<slug>/SKILL.md`
+- Binary Ninja: `~/.binaryninja/iris/skills/<slug>/SKILL.md`
+
+Each skill lives in its own subdirectory.
 
 ```
-~/.idapro/iris/skills/
+~/.idapro/iris/skills/      # or ~/.binaryninja/iris/skills/
   my-skill/
     SKILL.md            # required — frontmatter + prompt body
     references/         # optional — .md files appended to the prompt
@@ -145,7 +168,10 @@ The `allowed_tools` field is optional — when set, the agent can only use those
 
 ### MCP Servers
 
-Connect external MCP servers to extend Iris with additional tools. Create the config file at `~/.idapro/iris/mcp.json`:
+Connect external MCP servers to extend Iris with additional tools. Create the config file at:
+
+- IDA: `~/.idapro/iris/mcp.json`
+- Binary Ninja: `~/.binaryninja/iris/mcp.json`
 
 ```json
 {
@@ -164,21 +190,24 @@ MCP servers are started when the plugin loads. Their tools appear alongside buil
 
 ## Tools
 
-57 tools organized by category:
+57 tools organized by category. IDA and Binary Ninja share the same interface; BN uses native IL terminology.
 
-| Category | Tools |
-|----------|-------|
-| **Navigation** | `get_cursor_position`, `get_current_function`, `jump_to`, `get_name_at`, `get_address_of` |
-| **Functions** | `list_functions`, `get_function_info`, `search_functions` |
-| **Strings** | `list_strings`, `search_strings`, `get_string_at` |
-| **Database** | `list_segments`, `list_imports`, `list_exports`, `get_binary_info`, `read_bytes` |
-| **Disassembly** | `read_disassembly`, `read_function_disassembly`, `get_instruction_info` |
-| **Decompiler** | `decompile_function`, `get_pseudocode`, `get_decompiler_variables` |
-| **Xrefs** | `xrefs_to`, `xrefs_from`, `function_xrefs` |
-| **Annotations** | `rename_function`, `rename_variable`, `set_comment`, `set_function_comment`, `rename_address`, `set_type` |
-| **Types** | `create_struct`, `modify_struct`, `get_struct_info`, `list_structs`, `create_enum`, `modify_enum`, `get_enum_info`, `list_enums`, `create_typedef`, `apply_struct_to_address`, `apply_type_to_variable`, `set_function_prototype`, `import_c_header`, `suggest_struct_from_accesses`, `propagate_type`, `get_type_libraries`, `import_type_from_library` |
-| **Microcode** | `get_microcode`, `get_microcode_block`, `nop_microcode`, `install_microcode_optimizer`, `remove_microcode_optimizer`, `list_microcode_optimizers`, `redecompile_function` |
-| **Scripting** | `execute_python` (last resort — the agent prefers built-in tools) |
+| Category | IDA Tools | BN Tools (where different) |
+|----------|-----------|---------------------------|
+| **Navigation** | `get_cursor_position`, `get_current_function`, `jump_to`, `get_name_at`, `get_address_of` | same |
+| **Functions** | `list_functions`, `get_function_info`, `search_functions` | same |
+| **Strings** | `list_strings`, `search_strings`, `get_string_at` | same |
+| **Database** | `list_segments`, `list_imports`, `list_exports`, `get_binary_info`, `read_bytes` | same |
+| **Disassembly** | `read_disassembly`, `read_function_disassembly`, `get_instruction_info` | same |
+| **Decompiler** | `decompile_function`, `get_pseudocode`, `get_decompiler_variables` | same |
+| **Xrefs** | `xrefs_to`, `xrefs_from`, `function_xrefs` | same |
+| **Annotations** | `rename_function`, `rename_variable`, `set_comment`, `set_function_comment`, `rename_address`, `set_type` | same |
+| **Types** | `create_struct`, `modify_struct`, `get_struct_info`, `list_structs`, `create_enum`, `modify_enum`, `get_enum_info`, `list_enums`, `create_typedef`, `apply_struct_to_address`, `apply_type_to_variable`, `set_function_prototype`, `import_c_header`, `suggest_struct_from_accesses`, `propagate_type`, `get_type_libraries`, `import_type_from_library` | same |
+| **Microcode (IDA)** | `get_microcode`, `get_microcode_block`, `nop_microcode`, `install_microcode_optimizer`, `remove_microcode_optimizer`, `list_microcode_optimizers`, `redecompile_function` | — |
+| **IL (BN)** | — | `get_il`, `get_il_block`, `nop_instructions`, `install_il_optimizer`, `remove_il_optimizer`, `list_il_optimizers`, `redecompile_function` |
+| **Scripting** | `execute_python` (last resort — the agent prefers built-in tools) | same |
+
+Binary Ninja uses native IL levels (`llil`, `mlil`, `hlil`) instead of IDA's MMAT maturity levels.
 
 
 ## Examples
@@ -229,4 +258,3 @@ User: remove all the junk and clean the function, identify the pattern and remov
 ![alt text](assets/clean_ctf.png)
 
 ### Batch renaming
-

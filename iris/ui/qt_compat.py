@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from PySide6.QtCore import Signal, Qt, QObject, QTimer  # noqa: F401
 from PySide6.QtWidgets import (  # noqa: F401
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QPlainTextEdit, QScrollArea, QFrame,
     QDialog, QDialogButtonBox, QComboBox, QLineEdit, QSpinBox,
     QDoubleSpinBox, QCheckBox, QGroupBox, QFormLayout,
-    QToolButton, QSizePolicy,
+    QToolButton, QSizePolicy, QTabWidget, QTabBar,
 )
 
 QT_BINDING = "PySide6"

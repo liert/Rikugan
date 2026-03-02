@@ -34,9 +34,9 @@ QFrame#message_assistant {
 QFrame#message_tool {
     background-color: #252526;
     border: 1px solid #3c3c3c;
-    border-radius: 6px;
-    padding: 6px;
-    margin: 2px 20px 2px 20px;
+    border-radius: 4px;
+    padding: 3px 6px;
+    margin: 1px 12px 1px 12px;
 }
 
 QFrame#message_thinking {

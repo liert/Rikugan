@@ -22,10 +22,17 @@ Strings are the fastest path to understanding.
 5. Use `xrefs_to` on the decode function to find all encrypted string call sites
 6. Decrypted strings give you: C2 addresses, file paths, registry keys, API names
 
+**RC4 hunting shortcut:** When you find RC4 S-box constants, use xrefs_to
+on the constant's address → finds KSA → decompile → xrefs_to → finds
+the decrypt wrapper. Do NOT search for KSA byte-swap hex pattern — too
+many false positives.
+
 ### Phase 2: Structural Deobfuscation (CFF + Opaque Predicates)
 
 **Control Flow Flattening (CFF):**
-- Look for functions with a large switch/dispatcher pattern and a state variable
+Red flags: a switch with all cases assigning the same variable, a loop
+updating a state variable, cyclomatic complexity > 40 with few behaviors.
+
 - Read the microcode with `get_microcode` to see the raw control flow
 - Use `install_microcode_optimizer` to write a custom optimizer that:
   - Identifies the dispatcher variable and switch
@@ -33,14 +40,18 @@ Strings are the fastest path to understanding.
   - Redecompile with `redecompile_function`
 
 **Opaque Predicates:**
-- Conditions that always evaluate to true/false (algebraic invariants, constant comparisons)
+Red flags: `x * (x-1) % 2 == 0` (always true), constant comparisons
+with computed values that always evaluate one way.
+
 - Use `get_microcode` to identify them, `nop_microcode` to remove dead branches
 - Run after CFF removal — CFF removal often exposes hidden opaque predicates
 
 ### Phase 3: Expression Deobfuscation (MBA + Arithmetic Encoding)
 
 **Mixed Boolean-Arithmetic (MBA):**
-- Expressions like `(x ^ y) + 2*(x & y)` that equal `x + y`
+Red flags: `(x ^ y) + 2*(x & y)` equals `x + y`, complex expressions
+for simple operations.
+
 - Look for these in decompiled output after structural deobfuscation
 - Use `install_microcode_optimizer` to simplify recognized MBA patterns
 - Redecompile to verify
@@ -70,4 +81,5 @@ After all phases complete:
 - If unsure whether code is obfuscated: decompile it and read the microcode. Spend 1 tool call to know for certain rather than 20 analyzing noise.
 - String decryption ALWAYS comes first — it unlocks context for everything else.
 - After each deobfuscation step, redecompile to verify improvement.
-- Use IRIS microcode tools (`get_microcode`, `nop_microcode`, `install_microcode_optimizer`, `redecompile_function`) — they give you direct control over the decompiler pipeline.
+- Use microcode tools (`get_microcode`, `nop_microcode`, `install_microcode_optimizer`, `redecompile_function`) — they give you direct control over the decompiler pipeline.
+- Batch independent deobfuscation calls: if 5 functions need CFF unflattening, launch them in parallel.

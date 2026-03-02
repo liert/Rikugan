@@ -16,6 +16,7 @@ import traceback
 from typing import Optional
 
 from ..constants import IDA_AVAILABLE as _IDA_AVAILABLE
+from .host import get_user_config_base_dir
 if _IDA_AVAILABLE:
     ida_kernwin = importlib.import_module("ida_kernwin")
 
@@ -24,11 +25,7 @@ _logger: Optional[logging.Logger] = None
 # --- Crash-proof file path ---
 
 def _log_file_path() -> str:
-    try:
-        idaapi = importlib.import_module("idaapi")
-        base = idaapi.get_user_idadir()
-    except Exception:
-        base = os.path.join(os.path.expanduser("~"), ".idapro")
+    base = get_user_config_base_dir()
     d = os.path.join(base, "iris")
     os.makedirs(d, exist_ok=True)
     return os.path.join(d, "iris_debug.log")

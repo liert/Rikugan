@@ -22,6 +22,7 @@ class OllamaProvider(OpenAICompatProvider):
         model: str = "llama3.1",
         **kwargs,
     ):
+        api_key = api_key or "ollama"
         api_base = api_base or os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_URL)
         super().__init__(
             api_key=api_key, api_base=api_base, model=model,

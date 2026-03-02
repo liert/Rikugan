@@ -11,7 +11,7 @@ Be targeted and efficient. CTF binaries are usually small, purpose-built, and co
 
 ## Workflow
 
-1. `get_binary_info` + `list_functions` — orient yourself, find main or entry
+1. `get_binary_info` + `list_functions` — orient yourself, find main or entry (batch these)
 2. `decompile_function` on main — identify the input path and validation logic
 3. Trace the check function: usually a comparison, hash check, or transformation chain
 4. Identify the algorithm: XOR, custom cipher, hash, math constraints, maze/game, VM-based
@@ -27,6 +27,29 @@ Be targeted and efficient. CTF binaries are usually small, purpose-built, and co
 - **Constraint satisfaction** — extract constraints, use z3 via `execute_python`
 - **Anti-debug checks** (ptrace, IsDebuggerPresent) guarding the real logic — bypass or ignore
 - **Multi-stage**: unpacking → decryption → flag check
+- **VM-based**: custom bytecode interpreter — map opcodes, trace execution, extract constraints
+
+## Solving Strategies
+
+**Direct extraction:** If the flag is compared byte-by-byte or XOR'd with
+a known key, extract both operands and compute the flag directly.
+
+**Constraint solving:** For complex validation (many conditions, polynomial
+checks, matrix transforms), extract constraints and write a z3 solver:
+```python
+from z3 import *
+s = Solver()
+flag = [BitVec(f'c{i}', 8) for i in range(N)]
+# Add constraints from decompiled validation...
+s.add(...)
+if s.check() == sat:
+    m = s.model()
+    print(''.join(chr(m[c].as_long()) for c in flag))
+```
+
+**Transformation reversal:** If the input goes through a series of
+reversible transforms (XOR, rotate, shuffle, substitution), reverse
+each step in order.
 
 ## Tips
 
@@ -35,3 +58,4 @@ Be targeted and efficient. CTF binaries are usually small, purpose-built, and co
 - Focus on the solve path — don't enumerate every function or produce threat reports
 - Check `xrefs_to` on comparison/validation functions to find where the flag is checked
 - Look at string xrefs — flag-related strings often lead directly to the validation logic
+- If stuck, check for hardcoded keys or constants near the comparison code

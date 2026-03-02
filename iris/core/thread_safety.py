@@ -10,8 +10,18 @@ from typing import Any, Callable, TypeVar
 F = TypeVar("F", bound=Callable[..., Any])
 
 from ..constants import IDA_AVAILABLE as _IDA_AVAILABLE
+from .host import is_binary_ninja as _is_binary_ninja
 if _IDA_AVAILABLE:
     ida_kernwin = importlib.import_module("ida_kernwin")
+
+_BN_AVAILABLE = _is_binary_ninja()
+if _BN_AVAILABLE:
+    try:
+        bn_mainthread = importlib.import_module("binaryninja.mainthread")
+    except Exception:
+        bn_mainthread = None
+else:
+    bn_mainthread = None
 
 
 def _log(msg: str) -> None:
@@ -24,42 +34,74 @@ def _log(msg: str) -> None:
 
 
 def idasync(func: F) -> F:
-    """Decorator: execute *func* on IDA's main thread via execute_sync.
+    """Decorator: execute *func* on host main thread when required.
 
-    When called from the main thread, runs directly.
-    When called from a background thread, marshals through MFF_WRITE.
-    Returns the result synchronously in both cases.
+    IDA: uses ``ida_kernwin.execute_sync`` with ``MFF_WRITE``.
+    Binary Ninja: uses ``binaryninja.mainthread.execute_on_main_thread_and_wait``.
+    Other hosts: executes directly.
     """
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         fname = func.__name__
-        if not _IDA_AVAILABLE:
-            return func(*args, **kwargs)
+        on_main = threading.current_thread() is threading.main_thread()
 
-        if threading.current_thread() is threading.main_thread():
-            _log(f"idasync: {fname} on main thread — direct call")
-            return func(*args, **kwargs)
+        if _IDA_AVAILABLE:
+            if on_main:
+                _log(f"idasync: {fname} on main thread — direct call")
+                return func(*args, **kwargs)
 
-        _log(f"idasync: {fname} on {threading.current_thread().name} — execute_sync START")
-        result_holder: list = []
-        error_holder: list = []
+            _log(f"idasync: {fname} on {threading.current_thread().name} — execute_sync START")
+            result_holder: list = []
+            error_holder: list = []
 
-        def _thunk():
-            try:
-                _log(f"idasync: {fname} _thunk executing on main thread")
-                result_holder.append(func(*args, **kwargs))
-                _log(f"idasync: {fname} _thunk OK")
-            except Exception as exc:
-                _log(f"idasync: {fname} _thunk ERROR: {exc}")
-                error_holder.append(exc)
-            return 0
+            def _thunk():
+                try:
+                    _log(f"idasync: {fname} _thunk executing on main thread")
+                    result_holder.append(func(*args, **kwargs))
+                    _log(f"idasync: {fname} _thunk OK")
+                except Exception as exc:
+                    _log(f"idasync: {fname} _thunk ERROR: {exc}")
+                    error_holder.append(exc)
+                return 0
 
-        rc = ida_kernwin.execute_sync(_thunk, ida_kernwin.MFF_WRITE)
-        _log(f"idasync: {fname} execute_sync returned rc={rc}")
+            rc = ida_kernwin.execute_sync(_thunk, ida_kernwin.MFF_WRITE)
+            _log(f"idasync: {fname} execute_sync returned rc={rc}")
 
-        if error_holder:
-            raise error_holder[0]
-        return result_holder[0] if result_holder else None
+            if error_holder:
+                raise error_holder[0]
+            return result_holder[0] if result_holder else None
+
+        if _BN_AVAILABLE:
+            if on_main:
+                _log(f"bnsync: {fname} on main thread — direct call")
+                return func(*args, **kwargs)
+
+            exec_wait = getattr(bn_mainthread, "execute_on_main_thread_and_wait", None)
+            if not callable(exec_wait):
+                _log(f"bnsync: {fname} no execute_on_main_thread_and_wait — direct call fallback")
+                return func(*args, **kwargs)
+
+            _log(f"bnsync: {fname} on {threading.current_thread().name} — execute_on_main_thread_and_wait START")
+            result_holder: list = []
+            error_holder: list = []
+
+            def _thunk() -> None:
+                try:
+                    _log(f"bnsync: {fname} _thunk executing on main thread")
+                    result_holder.append(func(*args, **kwargs))
+                    _log(f"bnsync: {fname} _thunk OK")
+                except Exception as exc:
+                    _log(f"bnsync: {fname} _thunk ERROR: {exc}")
+                    error_holder.append(exc)
+
+            exec_wait(_thunk)
+            _log(f"bnsync: {fname} execute_on_main_thread_and_wait DONE")
+
+            if error_holder:
+                raise error_holder[0]
+            return result_holder[0] if result_holder else None
+
+        return func(*args, **kwargs)
 
     return wrapper  # type: ignore[return-value]
 

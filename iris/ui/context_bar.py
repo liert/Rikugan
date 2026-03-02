@@ -3,17 +3,56 @@
 from __future__ import annotations
 
 import importlib
+from typing import Optional
 
 from .qt_compat import (
     QFrame, QHBoxLayout, QLabel, QWidget, QTimer,
 )
+from ..core.host import (
+    get_binary_ninja_view,
+    get_current_address,
+    is_binary_ninja,
+    is_ida,
+)
 
-try:
-    ida_funcs = importlib.import_module("ida_funcs")
-    ida_name = importlib.import_module("ida_name")
-    idc = importlib.import_module("idc")
-except ImportError:
-    ida_funcs = ida_name = idc = None  # type: ignore[assignment]  # noqa: N816 — outside IDA
+if is_ida():
+    try:
+        ida_funcs = importlib.import_module("ida_funcs")
+        ida_name = importlib.import_module("ida_name")
+    except Exception:
+        ida_funcs = ida_name = None  # type: ignore[assignment]  # noqa: N816
+else:
+    ida_funcs = ida_name = None  # type: ignore[assignment]  # noqa: N816
+
+
+def _function_name_at(ea: int) -> Optional[str]:
+    if is_ida() and ida_funcs is not None and ida_name is not None:
+        try:
+            func = ida_funcs.get_func(ea)
+            if func:
+                return ida_name.get_name(func.start_ea)
+        except Exception:
+            return None
+
+    if is_binary_ninja():
+        bv = get_binary_ninja_view()
+        if bv is None:
+            return None
+        try:
+            get_func_at = getattr(bv, "get_function_at", None)
+            if callable(get_func_at):
+                func = get_func_at(ea)
+                if func is not None:
+                    return getattr(func, "name", None)
+            get_containing = getattr(bv, "get_functions_containing", None)
+            if callable(get_containing):
+                funcs = list(get_containing(ea))
+                if funcs:
+                    return getattr(funcs[0], "name", None)
+        except Exception:
+            return None
+
+    return None
 
 
 class ContextBar(QFrame):
@@ -28,9 +67,9 @@ class ContextBar(QFrame):
         layout.setContentsMargins(8, 2, 8, 2)
         layout.setSpacing(16)
 
-        self._address_label = self._make_pair("Addr:", "—")
-        self._function_label = self._make_pair("Func:", "—")
-        self._model_label = self._make_pair("Model:", "—")
+        self._address_label = self._make_pair("Addr:", "\u2014")
+        self._function_label = self._make_pair("Func:", "\u2014")
+        self._model_label = self._make_pair("Model:", "\u2014")
         self._tokens_label = self._make_pair("Tokens:", "0")
 
         for label, value in (self._address_label, self._function_label,
@@ -82,14 +121,11 @@ class ContextBar(QFrame):
         if self._stopped:
             return
         try:
-            ea = idc.get_screen_ea()
-            self.set_address(f"0x{ea:x}")
-
-            func = ida_funcs.get_func(ea)
-            if func:
-                name = ida_name.get_name(func.start_ea)
-                self.set_function(name)
-            else:
-                self.set_function("—")
+            ea = get_current_address()
+            if ea is None:
+                return
+            self.set_address(f"0x{int(ea):x}")
+            name = _function_name_at(int(ea))
+            self.set_function(name or "\u2014")
         except Exception:
-            pass  # IDA API not available or internal error; timer keeps ticking safely
+            pass  # Host API unavailable or internal error; timer keeps ticking safely

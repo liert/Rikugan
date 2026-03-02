@@ -1,0 +1,213 @@
+"""Host/runtime detection and context utilities.
+
+This module centralizes runtime integration points so IRIS can run inside
+multiple reverse-engineering hosts (IDA Pro, Binary Ninja, or standalone).
+"""
+
+from __future__ import annotations
+
+import importlib
+import os
+import threading
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+
+HOST_IDA = "ida"
+HOST_BINARY_NINJA = "binary_ninja"
+HOST_STANDALONE = "standalone"
+
+_HOST = HOST_STANDALONE
+try:
+    importlib.import_module("idaapi")
+    _HOST = HOST_IDA
+except Exception:
+    try:
+        importlib.import_module("binaryninja")
+        _HOST = HOST_BINARY_NINJA
+    except Exception:
+        _HOST = HOST_STANDALONE
+
+
+_ctx_lock = threading.RLock()
+_bn_bv: Any = None
+_bn_address: Optional[int] = None
+_bn_navigate_cb: Optional[Callable[[int], bool]] = None
+
+
+def host_kind() -> str:
+    """Return the active runtime host: ida, binary_ninja, or standalone."""
+    return _HOST
+
+
+def is_ida() -> bool:
+    return _HOST == HOST_IDA
+
+
+def is_binary_ninja() -> bool:
+    return _HOST == HOST_BINARY_NINJA
+
+
+def host_display_name() -> str:
+    if _HOST == HOST_IDA:
+        return "IDA Pro"
+    if _HOST == HOST_BINARY_NINJA:
+        return "Binary Ninja"
+    return "Standalone Python"
+
+
+def set_binary_ninja_context(
+    bv: Any = None,
+    address: Optional[int] = None,
+    navigate_cb: Optional[Callable[[int], bool]] = None,
+) -> None:
+    """Update active Binary Ninja runtime context."""
+    with _ctx_lock:
+        global _bn_bv, _bn_address, _bn_navigate_cb
+        if bv is not None:
+            _bn_bv = bv
+        if address is not None:
+            _bn_address = int(address)
+        if navigate_cb is not None:
+            _bn_navigate_cb = navigate_cb
+
+
+def get_binary_ninja_view() -> Any:
+    """Return the most recently active Binary Ninja BinaryView."""
+    if not is_binary_ninja():
+        return None
+    with _ctx_lock:
+        return _bn_bv
+
+
+def get_current_address() -> Optional[int]:
+    """Return current cursor/address from host context if available."""
+    if is_ida():
+        try:
+            idc = importlib.import_module("idc")
+            return int(idc.get_screen_ea())
+        except Exception:
+            return None
+
+    if is_binary_ninja():
+        with _ctx_lock:
+            if _bn_address is not None:
+                return int(_bn_address)
+        # Best-effort UI query fallback when explicit context isn't set.
+        try:
+            bnui = importlib.import_module("binaryninjaui")
+            ui_ctx = getattr(bnui, "UIContext", None)
+            if ui_ctx is None:
+                return None
+            active = ui_ctx.activeContext()
+            if active is None:
+                return None
+            vf = active.getCurrentViewFrame()
+            if vf is None:
+                return None
+            vi = vf.getCurrentViewInterface()
+            if vi is not None and hasattr(vi, "getCurrentOffset"):
+                return int(vi.getCurrentOffset())
+            if hasattr(vf, "getCurrentOffset"):
+                return int(vf.getCurrentOffset())
+        except Exception:
+            return None
+
+    return None
+
+
+def set_current_address(address: int) -> None:
+    """Set current address in runtime context (used by host integrations)."""
+    if is_binary_ninja():
+        with _ctx_lock:
+            global _bn_address
+            _bn_address = int(address)
+
+
+def navigate_to(address: int) -> bool:
+    """Navigate UI to an address when the host supports it."""
+    ea = int(address)
+
+    if is_ida():
+        try:
+            ida_kernwin = importlib.import_module("ida_kernwin")
+            return bool(ida_kernwin.jumpto(ea))
+        except Exception:
+            return False
+
+    if is_binary_ninja():
+        with _ctx_lock:
+            cb = _bn_navigate_cb
+        if cb is not None:
+            try:
+                ok = bool(cb(ea))
+                if ok:
+                    set_current_address(ea)
+                return ok
+            except Exception:
+                pass
+        return False
+
+    return False
+
+
+def get_user_config_base_dir() -> str:
+    """Return host-specific user base directory for IRIS config/log files."""
+    if is_ida():
+        try:
+            idaapi = importlib.import_module("idaapi")
+            return idaapi.get_user_idadir()
+        except Exception:
+            return os.path.join(str(Path.home()), ".idapro")
+
+    if is_binary_ninja():
+        try:
+            bn = importlib.import_module("binaryninja")
+            user_directory = getattr(bn, "user_directory", None)
+            if callable(user_directory):
+                return user_directory()
+        except Exception:
+            pass
+        return os.path.join(str(Path.home()), ".binaryninja")
+
+    return os.path.join(str(Path.home()), ".idapro")
+
+
+def get_database_path() -> str:
+    """Return the loaded database/binary path for the active host."""
+    if is_ida():
+        try:
+            idaapi = importlib.import_module("idaapi")
+            idb = idaapi.get_path(idaapi.PATH_TYPE_IDB)
+            if idb:
+                return idb
+            return idaapi.get_input_file_path() or ""
+        except Exception:
+            return ""
+
+    if is_binary_ninja():
+        bv = get_binary_ninja_view()
+        if bv is None:
+            return ""
+
+        try:
+            for attr in ("file", "view_file"):
+                fobj = getattr(bv, attr, None)
+                if fobj is None:
+                    continue
+                for fattr in ("filename", "original_filename", "raw_filename"):
+                    path = getattr(fobj, fattr, None)
+                    if path:
+                        return str(path)
+        except Exception:
+            pass
+
+        for attr in ("file_name", "filename", "path"):
+            try:
+                path = getattr(bv, attr, None)
+                if path:
+                    return str(path)
+            except Exception:
+                pass
+
+    return ""

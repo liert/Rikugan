@@ -6,26 +6,9 @@ import json
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.errors import ToolError, ToolNotFoundError, ToolValidationError
-from ..core.logging import log_debug, log_error
+from ..core.logging import log_debug
 from ..constants import TOOL_RESULT_TRUNCATE_LEN
 from .base import ToolDefinition
-
-# Eagerly import all tool modules at module level so that every `from`
-# import goes through CPython's real __import__ during the Shiboken bypass
-# window in iris_plugin._toggle_panel().  Previously these were lazily
-# loaded inside create_default_registry(), which ran *after* the bypass
-# was deactivated — causing imports through Shiboken's hook.
-from . import (  # noqa: F401
-    navigation, functions, strings, database,
-    disassembly, decompiler, xrefs, annotations,
-    types_tools, scripting, microcode,
-)
-
-_TOOL_MODULES = (
-    navigation, functions, strings, database,
-    disassembly, decompiler, xrefs, annotations,
-    types_tools, scripting, microcode,
-)
 
 
 class ToolRegistry:
@@ -136,8 +119,9 @@ class ToolRegistry:
 
 
 def create_default_registry() -> ToolRegistry:
-    """Create a registry with all built-in tools."""
-    registry = ToolRegistry()
-    for mod in _TOOL_MODULES:
-        registry.register_module(mod)
-    return registry
+    """Create a registry with all built-in IDA tools.
+
+    Backward-compat shim — canonical location is iris.ida.tools.registry.
+    """
+    from ..ida.tools.registry import create_default_registry as _create
+    return _create()

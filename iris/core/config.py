@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..constants import (
     CONFIG_DIR_NAME,
@@ -17,20 +16,11 @@ from ..constants import (
     MCP_CONFIG_FILE,
     SKILLS_DIR_NAME,
 )
-
-_IDA_DIR: Optional[str] = None
-try:
-    import importlib as _importlib
-    _idaapi = _importlib.import_module("idaapi")
-    _IDA_DIR = _idaapi.get_user_idadir()
-except ImportError:
-    _IDA_DIR = None  # Running outside IDA (tests, standalone)
+from .host import get_user_config_base_dir
 
 
 def _default_config_dir() -> str:
-    if _IDA_DIR:
-        return os.path.join(_IDA_DIR, CONFIG_DIR_NAME)
-    return os.path.join(Path.home(), ".idapro", CONFIG_DIR_NAME)
+    return os.path.join(get_user_config_base_dir(), CONFIG_DIR_NAME)
 
 
 @dataclass

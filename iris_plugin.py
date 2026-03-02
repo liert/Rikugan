@@ -106,7 +106,7 @@ class IRISPlugmod(idaapi.plugmod_t):
 
             _load_submodules(iris)
             _log("_toggle_panel: all iris modules loaded")
-            IRISPanel = importlib.import_module("iris.ui.panel").IRISPanel
+            IRISPanel = importlib.import_module("iris.ida.ui.panel").IRISPanel
 
             _log("_toggle_panel: creating IRISPanel()")
             self._panel = IRISPanel()
