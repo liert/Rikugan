@@ -55,23 +55,27 @@ Depending on the complexity, the agent may invoke subagents to assist with the a
 
 Exploration mode is directly inspired by how code agents work, but applied to binaries instead of source code.
 
-When you trigger it, the main orchestrator first orients itself — it reads imports, exports, strings, and key functions to build a map of what the binary is doing. Then, instead of doing everything in a single context, it spawns subagents and delegates focused tasks to each one: "analyze this function", "trace this data structure", "figure out what this import cluster is doing".
+|![alt text](assets/subagents_example_1.png)|
+|:--:|
+|Triggering exploration mode with /explore|
+
+When you trigger it, the main orchestrator first orients itself — it reads imports, exports, strings, and key functions to build a map of what the binary is doing. 
+
+
+|![alt text](assets/subagents_example_2.png)|
+|:--:|
+|Logging a high-relevance finding via exploration_report|
+
+Then, instead of doing everything in a single context, it spawns subagents and delegates focused tasks to each one: "analyze this function", "trace this data structure", "figure out what this import cluster is doing".
+
+|![alt text](assets/subagents_example_3.png)|
+|:--:|
+|Orchestrator spawning subagents in parallel to tackle the binary|
 
 Subagents run in complete isolation from the parent session. They are essentially independent instances of Rikugan with a single task and zero prior knowledge. After finishing, each one reports its findings back to the orchestrator, which synthesizes everything and continues toward your goal.
 
 The result is a much deeper and faster analysis than a single agent could do alone — and it keeps the main context window clean.
 
-|![alt text](assets/subagents_example_1.png)|
-|:--:|
-|Subagents exploring functions in parallel|
-
-|![alt text](assets/subagents_example_2.png)|
-|:--:|
-|Each subagent reporting findings back to the orchestrator|
-
-|![alt text](assets/subagents_example_3.png)|
-|:--:|
-|Orchestrator synthesizing results into a plan|
 
 ```mermaid
 stateDiagram-v2
@@ -79,23 +83,23 @@ stateDiagram-v2
 
     [*] --> EXPLORE : /modify or /explore
 
-    EXPLORE --> EXPLORE : exploration_report()\nrename_function()\nsave_memory()
-    EXPLORE --> PLAN   : phase_transition(to_phase="plan")\n[guard: ≥1 function + ≥1 high‑relevance hypothesis]
+    EXPLORE --> EXPLORE : report / rename / save
+    EXPLORE --> PLAN : phase_transition to plan
 
-    PLAN --> EXECUTE : plan synthesized\n[guard: ≥1 change defined]
+    PLAN --> EXECUTE : plan ready
 
     note right of PLAN
-        /explore stops here —
-        read-only mode, no patching
+        /explore stops here
+        read-only, no patching
     end note
 
-    EXECUTE --> EXECUTE : patch → verify loop\n(read → assemble → write → redecompile)
-    EXECUTE --> SAVE    : all patches applied\n[guard: ≥1 patch recorded]
+    EXECUTE --> EXECUTE : patch and verify loop
+    EXECUTE --> SAVE : all patches applied
 
-    SAVE --> Done     : Save All → write to file
-    SAVE --> Rollback : Discard All → restore original bytes
+    SAVE --> Done : Save All
+    SAVE --> Rollback : Discard All
 
-    Done     --> [*]
+    Done --> [*]
     Rollback --> [*]
 ```
 
