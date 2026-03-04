@@ -18,9 +18,21 @@ HOST_BINARY_NINJA = "binary_ninja"
 HOST_STANDALONE = "standalone"
 
 _HOST = HOST_STANDALONE
+_idc = None
+_idaapi = None
+_ida_kernwin = None
 try:
-    importlib.import_module("idaapi")
+    _idaapi = importlib.import_module("idaapi")
     _HOST = HOST_IDA
+    # Cache frequently-used IDA modules to avoid repeated importlib lookups
+    try:
+        _idc = importlib.import_module("idc")
+    except Exception:
+        pass
+    try:
+        _ida_kernwin = importlib.import_module("ida_kernwin")
+    except Exception:
+        pass
 except Exception:
     try:
         importlib.import_module("binaryninja")
@@ -84,8 +96,7 @@ def get_current_address() -> Optional[int]:
     """Return current cursor/address from host context if available."""
     if is_ida():
         try:
-            idc = importlib.import_module("idc")
-            return int(idc.get_screen_ea())
+            return int(_idc.get_screen_ea()) if _idc else None
         except Exception:
             return None
 
@@ -130,8 +141,7 @@ def navigate_to(address: int) -> bool:
 
     if is_ida():
         try:
-            ida_kernwin = importlib.import_module("ida_kernwin")
-            return bool(ida_kernwin.jumpto(ea))
+            return bool(_ida_kernwin.jumpto(ea)) if _ida_kernwin else False
         except Exception:
             return False
 
@@ -155,8 +165,7 @@ def get_user_config_base_dir() -> str:
     """Return host-specific user base directory for Rikugan config/log files."""
     if is_ida():
         try:
-            idaapi = importlib.import_module("idaapi")
-            return idaapi.get_user_idadir()
+            return _idaapi.get_user_idadir() if _idaapi else os.path.join(str(Path.home()), ".idapro")
         except Exception:
             return os.path.join(str(Path.home()), ".idapro")
 
@@ -177,11 +186,12 @@ def get_database_path() -> str:
     """Return the loaded database/binary path for the active host."""
     if is_ida():
         try:
-            idaapi = importlib.import_module("idaapi")
-            idb = idaapi.get_path(idaapi.PATH_TYPE_IDB)
+            if _idaapi is None:
+                return ""
+            idb = _idaapi.get_path(_idaapi.PATH_TYPE_IDB)
             if idb:
                 return idb
-            return idaapi.get_input_file_path() or ""
+            return _idaapi.get_input_file_path() or ""
         except Exception:
             return ""
 

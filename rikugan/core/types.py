@@ -83,6 +83,8 @@ class Message:
                 "prompt_tokens": self.token_usage.prompt_tokens,
                 "completion_tokens": self.token_usage.completion_tokens,
                 "total_tokens": self.token_usage.total_tokens,
+                "cache_read_tokens": self.token_usage.cache_read_tokens,
+                "cache_creation_tokens": self.token_usage.cache_creation_tokens,
             }
         return d
 
@@ -106,6 +108,8 @@ class Message:
                 prompt_tokens=u.get("prompt_tokens", 0),
                 completion_tokens=u.get("completion_tokens", 0),
                 total_tokens=u.get("total_tokens", 0),
+                cache_read_tokens=u.get("cache_read_tokens", 0),
+                cache_creation_tokens=u.get("cache_creation_tokens", 0),
             )
         return cls(
             role=Role(d["role"]),

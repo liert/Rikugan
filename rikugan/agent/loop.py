@@ -792,7 +792,6 @@ class AgentLoop:
         if not idb_dir:
             return
 
-        import time as _time
         md_path = os.path.join(idb_dir, "RIKUGAN.md")
         try:
             if not os.path.exists(md_path):
@@ -803,7 +802,7 @@ class AgentLoop:
                         "The agent reads the first 200 lines into its system prompt.\n\n"
                     )
             with open(md_path, "a", encoding="utf-8") as f:
-                timestamp = _time.strftime("%Y-%m-%d %H:%M")
+                timestamp = time.strftime("%Y-%m-%d %H:%M")
                 f.write(f"\n## Plan ({timestamp})\n")
                 f.write(f"Goal: {user_goal[:200]}\n")
                 for i, step in enumerate(steps, 1):
