@@ -63,6 +63,7 @@ class SessionState:
     provider_name: str = ""
     model_name: str = ""
     idb_path: str = ""
+    db_instance_id: str = ""
     metadata: Dict[str, str] = field(default_factory=dict)
 
     def add_message(self, msg: Message) -> None:

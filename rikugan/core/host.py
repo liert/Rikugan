@@ -222,3 +222,63 @@ def get_database_path() -> str:
                 sys.stderr.write(f"[Rikugan] get_database_path {attr} failed: {e}\n")
 
     return ""
+
+
+def get_database_instance_id() -> str:
+    """Read the Rikugan instance UUID stored in the current IDB/BNDB.
+
+    Returns '' if none is stored yet.
+    """
+    if is_ida():
+        try:
+            idaapi = _idaapi
+            if idaapi is None:
+                return ""
+            node = idaapi.netnode("$ rikugan", 0, False)
+            if node == idaapi.BADNODE:
+                return ""
+            val = node.supstr(0)
+            return val if val else ""
+        except Exception:
+            return ""
+
+    if is_binary_ninja():
+        bv = get_binary_ninja_view()
+        if bv is None:
+            return ""
+        try:
+            val = bv.query_metadata("rikugan_db_id")
+            return str(val) if val else ""
+        except Exception:
+            return ""
+
+    return ""
+
+
+def set_database_instance_id(instance_id: str) -> bool:
+    """Store a Rikugan instance UUID in the current IDB/BNDB.
+
+    Returns True on success.
+    """
+    if is_ida():
+        try:
+            idaapi = _idaapi
+            if idaapi is None:
+                return False
+            node = idaapi.netnode("$ rikugan", 0, True)
+            node.supset(0, instance_id)
+            return True
+        except Exception:
+            return False
+
+    if is_binary_ninja():
+        bv = get_binary_ninja_view()
+        if bv is None:
+            return False
+        try:
+            bv.store_metadata("rikugan_db_id", instance_id)
+            return True
+        except Exception:
+            return False
+
+    return False

@@ -10,6 +10,7 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from ..core.config import RikuganConfig
+from ..core.host import get_database_instance_id, set_database_instance_id
 from ..core.logging import log_debug, log_error, log_info
 from ..agent.loop import AgentLoop, BackgroundAgentRunner
 from ..agent.turn import TurnEvent
@@ -53,6 +54,7 @@ class SessionControllerBase:
         self._skill_registry = SkillRegistry()
         self._mcp_manager = MCPManager()
         self._idb_path = _normalize_db_path(database_path_getter())
+        self._db_instance_id = self._ensure_db_instance_id()
         self._runtime_init_done = threading.Event()
         self._runtime_shutdown = threading.Event()
         self._runtime_init_thread = threading.Thread(
@@ -93,6 +95,23 @@ class SessionControllerBase:
             elapsed_ms = int((time.perf_counter() - started) * 1000)
             log_debug(f"Runtime initialization completed in {elapsed_ms} ms")
 
+    # --- Instance ID ---
+
+    @staticmethod
+    def _ensure_db_instance_id() -> str:
+        """Read or generate a database-instance UUID for the current IDB/BNDB."""
+        existing = get_database_instance_id()
+        if existing:
+            log_debug(f"Database instance ID: {existing}")
+            return existing
+        new_id = uuid.uuid4().hex
+        if set_database_instance_id(new_id):
+            log_info(f"Generated new database instance ID: {new_id}")
+            return new_id
+        # Standalone or write failure — use an ephemeral ID (won't persist)
+        log_debug("Could not persist database instance ID, using ephemeral")
+        return new_id
+
     # --- Tab / multi-session management ---
 
     def _create_session(self) -> str:
@@ -102,6 +121,7 @@ class SessionControllerBase:
             provider_name=self.config.provider.name,
             model_name=self.config.provider.model,
             idb_path=self._idb_path,
+            db_instance_id=self._db_instance_id,
         )
         self._sessions[tab_id] = session
         return tab_id
@@ -122,6 +142,7 @@ class SessionControllerBase:
             provider_name=source.provider_name,
             model_name=source.model_name,
             idb_path=source.idb_path,
+            db_instance_id=source.db_instance_id,
         )
         forked.messages = copy.deepcopy(source.messages)
         forked.total_usage = copy.copy(source.total_usage)
@@ -275,6 +296,7 @@ class SessionControllerBase:
             provider_name=self.config.provider.name,
             model_name=self.config.provider.model,
             idb_path=self._idb_path,
+            db_instance_id=self._db_instance_id,
         )
         log_info("Started new chat session (active tab)")
 
@@ -286,7 +308,10 @@ class SessionControllerBase:
             return results
         try:
             history = SessionHistory(self.config)
-            summaries = history.list_sessions(idb_path=self._idb_path)
+            summaries = history.list_sessions(
+                idb_path=self._idb_path,
+                db_instance_id=self._db_instance_id,
+            )
             summaries.sort(key=lambda s: s.get("created_at", 0))
             for summary in summaries:
                 session = history.load_session(summary["id"])
@@ -314,7 +339,10 @@ class SessionControllerBase:
             return None
         try:
             history = SessionHistory(self.config)
-            session = history.get_latest_session(idb_path=self._idb_path)
+            session = history.get_latest_session(
+                idb_path=self._idb_path,
+                db_instance_id=self._db_instance_id,
+            )
             if session and session.messages:
                 log_debug(f"Restoring session {session.id} with {len(session.messages)} messages")
                 self._sessions[self._active_tab_id] = session
@@ -336,6 +364,7 @@ class SessionControllerBase:
                     log_error(f"Failed to save session {tab_id} on file change: {e}")
         self._sessions.clear()
         self._idb_path = _normalize_db_path(new_idb_path)
+        self._db_instance_id = self._ensure_db_instance_id()
         tab_id = self._create_session()
         self._active_tab_id = tab_id
 
