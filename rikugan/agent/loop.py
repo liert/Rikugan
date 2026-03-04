@@ -1091,20 +1091,13 @@ class AgentLoop:
         # Minify all text before sending to the provider to reduce token usage
         minified_system = minify_text(system_prompt)
 
-        def _build_provider_messages(trim_to_context: bool = True) -> List[Message]:
-            ctx_window = self.config.provider.context_window if trim_to_context else 0
-            return minify_messages(
-                self.session.get_messages_for_provider(
-                    context_window=ctx_window,
-                )
-            )
-
-        # Estimate full in-memory context (without trimming) so compaction
-        # decisions still work even when provider streaming usage is missing.
-        full_messages = _build_provider_messages(trim_to_context=False)
+        # Estimate full in-memory context so compaction decisions work
+        # even when provider streaming usage is missing.
+        full_messages = minify_messages(
+            self.session.get_messages_for_provider(context_window=0)
+        )
         full_prompt_tokens = self._estimate_prompt_tokens(
-            full_messages,
-            minified_system,
+            full_messages, minified_system,
         )
         if full_prompt_tokens > 0:
             self._context_manager.update_usage(
@@ -1123,17 +1116,18 @@ class AgentLoop:
             self.session.messages = self._context_manager.compact_messages(
                 self.session.messages
             )
+            # Rebuild after compaction
+            full_messages = None  # release memory
 
-        # Rebuild prompt payload after possible compaction, this time with
-        # context-window trimming for the actual provider request.
-        provider_messages = _build_provider_messages(trim_to_context=True)
+        # Build prompt payload with context-window trimming for the provider.
+        ctx_window = self.config.provider.context_window
+        provider_messages = minify_messages(
+            self.session.get_messages_for_provider(context_window=ctx_window)
+        )
 
-        # Some providers (especially OpenAI-compatible endpoints) don't emit
-        # streaming usage. Estimate prompt size locally so UI/context tracking
-        # still works.
+        # Estimate prompt size for providers that don't emit streaming usage.
         estimated_prompt_tokens = self._estimate_prompt_tokens(
-            provider_messages,
-            minified_system,
+            provider_messages, minified_system,
         )
         estimated_usage: Optional[TokenUsage] = None
         if estimated_prompt_tokens > 0:
@@ -1248,16 +1242,17 @@ class AgentLoop:
 
     @staticmethod
     def _estimate_prompt_tokens(provider_messages: List[Message], system_prompt: str) -> int:
-        """Estimate prompt token usage from provider payload for fallback accounting."""
-        try:
-            payload = json.dumps(
-                [m.to_dict() for m in provider_messages],
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-        except Exception:
-            payload = str(provider_messages)
-        return ContextWindowManager.estimate_tokens(f"{system_prompt}\n{payload}")
+        """Estimate prompt token usage from message content lengths.
+
+        Uses a lightweight character sum instead of JSON serialization.
+        """
+        char_count = len(system_prompt)
+        for m in provider_messages:
+            char_count += len(m.content) if m.content else 0
+            if m.tool_calls:
+                for tc in m.tool_calls:
+                    char_count += len(str(tc.arguments)) if tc.arguments else 0
+        return ContextWindowManager.estimate_tokens_from_chars(char_count)
 
     @staticmethod
     def _describe_tool_call(name: str, args: Dict[str, Any]) -> str:

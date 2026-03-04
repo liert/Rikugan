@@ -101,5 +101,12 @@ class ContextWindowManager:
         """
         if not text:
             return 0
+        return ContextWindowManager.estimate_tokens_from_chars(len(text))
+
+    @staticmethod
+    def estimate_tokens_from_chars(char_count: int) -> int:
+        """Estimate token count from a character count (~3.5 chars/token)."""
+        if char_count <= 0:
+            return 0
         # ~3.5 chars/token for English text; multiply by 10/35 to avoid float
-        return max(1, len(text) * 10 // 35)
+        return max(1, char_count * 10 // 35)
