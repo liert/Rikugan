@@ -33,6 +33,9 @@ from .exploration_mode import (
 from .minify import minify_text, minify_messages
 from ..state.session import SessionState
 
+# Minimum acceptable context window; smaller values get flagged by /doctor.
+_MIN_CONTEXT_WINDOW_TOKENS = 8_000
+
 _PLAN_GENERATION_PROMPT = (
     "You are in PLAN MODE. Analyze the user's request and create a numbered "
     "step-by-step plan. Output ONLY the plan as a numbered list, one step per "
@@ -940,7 +943,7 @@ class AgentLoop:
 
         # Check context window
         ctx = self.config.provider.context_window
-        if ctx >= 8000:
+        if ctx >= _MIN_CONTEXT_WINDOW_TOKENS:
             ok.append(f"Context window: {ctx:,} tokens")
         else:
             issues.append(f"Context window very small: {ctx} tokens")

@@ -31,14 +31,9 @@ else:  # pragma: no cover - imported outside Binary Ninja
     ACTION_DEFS = ()
     bnui = None
 
-    def get_function_at(*_args, **_kwargs):
-        return None
-
-    def get_function_name(_func):
-        return ""
-
-    def build_context(*_args, **_kwargs):
-        return {}
+    get_function_at = lambda *_a, **_k: None  # noqa: E731 — no-op stub outside BN
+    get_function_name = lambda _f: ""  # noqa: E731 — no-op stub outside BN
+    build_context = lambda *_a, **_k: {}  # noqa: E731 — no-op stub outside BN
 
 RIKUGAN_SIDEBAR_NAME = "Rikugan"
 
