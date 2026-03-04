@@ -12,10 +12,6 @@ from .qt_compat import (
 )
 from .markdown import md_to_html
 
-_MAX_ARGS_DISPLAY = 2000
-_MAX_RESULT_DISPLAY = 3000
-_TOOL_PREVIEW_LINES = 3
-
 _THINKING_PHRASES = [
     "analyzing binary structure...",
     "examining control flow...",

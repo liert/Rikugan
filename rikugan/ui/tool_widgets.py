@@ -271,6 +271,18 @@ def _truncate_preview(text: str, max_lines: int = _TOOL_PREVIEW_LINES) -> str:
     return f"{preview}\n… +{remaining} lines"
 
 
+def _make_preview_label() -> QLabel:
+    """Create a collapsed-state preview QLabel (shared by ToolCallWidget/ToolBatchWidget)."""
+    lbl = QLabel()
+    lbl.setObjectName("tool_content")
+    lbl.setWordWrap(True)
+    lbl.setStyleSheet(
+        "color: #6a6a7a; font-family: monospace; font-size: 10px; margin-left: 28px;"
+    )
+    lbl.setVisible(False)
+    return lbl
+
+
 # ---------------------------------------------------------------------------
 # Shared spinner timer
 # ---------------------------------------------------------------------------
@@ -388,13 +400,7 @@ class ToolCallWidget(QFrame):
 
     def _build_preview(self) -> QLabel:
         """Build the preview label (truncated args, shown when collapsed)."""
-        self._preview_label = QLabel()
-        self._preview_label.setObjectName("tool_content")
-        self._preview_label.setWordWrap(True)
-        self._preview_label.setStyleSheet(
-            "color: #6a6a7a; font-family: monospace; font-size: 10px; margin-left: 28px;"
-        )
-        self._preview_label.setVisible(False)
+        self._preview_label = _make_preview_label()
         return self._preview_label
 
     def _build_detail_section(self) -> QWidget:
@@ -558,13 +564,7 @@ class ToolBatchWidget(QFrame):
 
     def _build_preview(self) -> QLabel:
         """Build the preview label for the first call's args."""
-        self._preview_label = QLabel()
-        self._preview_label.setObjectName("tool_content")
-        self._preview_label.setWordWrap(True)
-        self._preview_label.setStyleSheet(
-            "color: #6a6a7a; font-family: monospace; font-size: 10px; margin-left: 28px;"
-        )
-        self._preview_label.setVisible(False)
+        self._preview_label = _make_preview_label()
         return self._preview_label
 
     def _build_detail_section(self) -> QWidget:
