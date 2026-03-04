@@ -18,10 +18,13 @@ from ..providers.anthropic_provider import resolve_anthropic_auth
 from ..providers.ollama_provider import DEFAULT_OLLAMA_URL
 from ..providers.registry import ProviderRegistry
 
+_DEFAULT_MINIMAX_URL = "https://api.minimax.io/anthropic"
+_CUSTOM_PROVIDER_URL_PLACEHOLDER = "https://api.example.com/v1"
+
 # Known default API base URLs per provider — used to auto-clear on switch
 _PROVIDER_BASES = {
     "ollama": DEFAULT_OLLAMA_URL,
-    "minimax": "https://api.minimax.io/anthropic",
+    "minimax": _DEFAULT_MINIMAX_URL,
 }
 
 # Placeholder/default keys that should be cleared on provider switch
@@ -122,7 +125,7 @@ class _AddProviderDialog(QDialog):
         form.addRow("Connection Name:", self._name_edit)
 
         self._base_edit = QLineEdit()
-        self._base_edit.setPlaceholderText("https://api.example.com/v1")
+        self._base_edit.setPlaceholderText(_CUSTOM_PROVIDER_URL_PLACEHOLDER)
         form.addRow("API Base URL:", self._base_edit)
 
         layout.addLayout(form)

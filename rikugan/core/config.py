@@ -18,6 +18,7 @@ from ..constants import (
     SKILLS_DIR_NAME,
 )
 from .host import get_user_config_base_dir
+from .logging import log_error
 
 
 def _default_config_dir() -> str:
@@ -80,7 +81,6 @@ class RikuganConfig:
     def save(self) -> None:
         errors = self.validate()
         if errors:
-            from ..core.logging import log_error
             for err in errors:
                 log_error(f"Config validation: {err}")
             # Clamp to valid ranges rather than refusing to save
