@@ -28,8 +28,8 @@ _bn_log = None
 if _BN_AVAILABLE:
     try:
         _bn_log = importlib.import_module("binaryninja.log")
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"[Rikugan] Could not import binaryninja.log: {e}\n")
 
 _logger: Optional[logging.Logger] = None
 
@@ -50,8 +50,8 @@ class _FlushFileHandler(logging.FileHandler):
         try:
             self.stream.flush()
             os.fsync(self.stream.fileno())
-        except OSError:
-            pass  # fsync can fail on pipes/redirected streams — non-fatal for logging
+        except OSError as e:
+            sys.stderr.write(f"[Rikugan] fsync failed (non-fatal): {e}\n")
 
 
 class _JSONFormatter(logging.Formatter):
@@ -77,8 +77,8 @@ class IDAHandler(logging.Handler):
         if _IDA_AVAILABLE:
             try:
                 ida_kernwin.msg(f"{msg}\n")
-            except RuntimeError:
-                pass  # IDA output window may be destroyed during shutdown
+            except RuntimeError as e:
+                sys.stderr.write(f"[Rikugan] IDA output window unavailable: {e}\n")
         elif _bn_log is not None:
             try:
                 if record.levelno >= logging.ERROR:
@@ -87,8 +87,8 @@ class IDAHandler(logging.Handler):
                     _bn_log.log_warn(msg)
                 else:
                     _bn_log.log_info(msg)
-            except Exception:
-                pass
+            except Exception as e:
+                sys.stderr.write(f"[Rikugan] binaryninja log emit failed: {e}\n")
         else:
             sys.stderr.write(f"{msg}\n")
 
@@ -132,8 +132,8 @@ def get_logger() -> logging.Logger:
         json_handler.setLevel(logging.INFO)
         json_handler.setFormatter(_JSONFormatter())
         _logger.addHandler(json_handler)
-    except Exception:
-        pass  # Non-critical — structured logging is optional
+    except Exception as e:
+        sys.stderr.write(f"[Rikugan] Could not open structured log file: {e}\n")
 
     return _logger
 

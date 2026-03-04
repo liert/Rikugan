@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from typing import Annotated, Optional
 
+from ..core.logging import log_debug
 from .base import parse_addr, tool
 
 
@@ -14,8 +15,8 @@ try:
     ida_name = importlib.import_module("ida_name")
     idaapi = importlib.import_module("idaapi")
     idc = importlib.import_module("idc")
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 
 

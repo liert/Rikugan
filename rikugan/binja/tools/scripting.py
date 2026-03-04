@@ -8,6 +8,7 @@ import io
 import re
 from typing import Annotated
 
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import current_ea_or_default, require_bv
 
@@ -38,8 +39,8 @@ def _get_base_namespace() -> dict:
         for mod_name in _BN_MODULE_NAMES:
             try:
                 ns[mod_name] = importlib.import_module(mod_name)
-            except ImportError:
-                pass
+            except ImportError as e:
+                log_debug(f"Optional BN module {mod_name!r} not available: {e}")
         _cached_namespace = ns
 
     bv = require_bv()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Iterable, List, Tuple
 
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import (
     get_function_at,
@@ -66,8 +67,8 @@ def _refs_from(bv, ea: int) -> List[Tuple[int, str]]:
                     d = getattr(dst, "target", None)
                     if isinstance(d, int):
                         out.append((d, "code"))
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_iter_refs_from get_code_refs_from failed at 0x{ea:x}: {e}")
 
     get_data = getattr(bv, "get_data_refs_from", None)
     if callable(get_data):
@@ -75,8 +76,8 @@ def _refs_from(bv, ea: int) -> List[Tuple[int, str]]:
             for dst in list(get_data(ea)):
                 if isinstance(dst, int):
                     out.append((dst, "data"))
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_iter_refs_from get_data_refs_from failed at 0x{ea:x}: {e}")
     return out
 
 

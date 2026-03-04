@@ -16,6 +16,16 @@ from ..core.logging import log_debug
 from .session import SessionState
 
 
+def _normalize_db_path(path: str) -> str:
+    """Return a stable canonical DB path for session filtering."""
+    if not path:
+        return ""
+    try:
+        return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+    except Exception:
+        return path
+
+
 class SessionHistory:
     """Manages saved sessions on disk."""
 
@@ -26,13 +36,14 @@ class SessionHistory:
     def save_session(self, session: SessionState, description: str = "") -> str:
         """Save a session and return the file path."""
         path = os.path.join(self._dir, f"{session.id}.json")
+        db_path = _normalize_db_path(session.idb_path)
         data = {
             "schema_version": SESSION_SCHEMA_VERSION,
             "id": session.id,
             "created_at": session.created_at,
             "provider_name": session.provider_name,
             "model_name": session.model_name,
-            "idb_path": session.idb_path,
+            "idb_path": db_path,
             "current_turn": session.current_turn,
             "metadata": session.metadata,
             "messages": [m.to_dict() for m in session.messages],
@@ -71,6 +82,7 @@ class SessionHistory:
     def list_sessions(self, idb_path: str = "") -> List[Dict[str, Any]]:
         """List saved session summaries, optionally filtered by IDB path."""
         sessions = []
+        normalized_target = _normalize_db_path(idb_path)
         for fname in sorted(os.listdir(self._dir), reverse=True):
             if not fname.endswith(".json"):
                 continue
@@ -83,13 +95,13 @@ class SessionHistory:
                     "created_at": data.get("created_at", 0),
                     "provider": data.get("provider_name", ""),
                     "model": data.get("model_name", ""),
-                    "idb_path": data.get("idb_path", ""),
+                    "idb_path": _normalize_db_path(data.get("idb_path", "")),
                     "messages": len(data.get("messages", [])),
                     "description": data.get("description", ""),
                 }
                 # Strict filter: only return sessions matching the exact idb_path
-                if idb_path:
-                    if entry["idb_path"] != idb_path:
+                if normalized_target:
+                    if entry["idb_path"] != normalized_target:
                         continue
                 else:
                     # No idb_path given — only return sessions with no idb_path

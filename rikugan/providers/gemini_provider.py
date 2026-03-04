@@ -12,6 +12,7 @@ from ..core.types import (
     Message, ModelInfo, ProviderCapabilities, Role, StreamChunk,
     TokenUsage, ToolCall,
 )
+from ..core.logging import log_debug
 from .base import LLMProvider
 
 
@@ -96,8 +97,8 @@ class GeminiProvider(LLMProvider):
                 msg = str(e)
                 if "token" in msg.lower() and ("limit" in msg.lower() or "exceed" in msg.lower()):
                     raise ContextLengthError(msg, provider="gemini") from e
-        except ImportError:
-            pass
+        except ImportError as ie:
+            log_debug(f"google.api_core.exceptions unavailable, using string matching: {ie}")
 
         msg = str(e)
         msg_lower = msg.lower()

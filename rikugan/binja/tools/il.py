@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Any, Dict, List
 
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import (
     get_function_at,
@@ -64,7 +65,8 @@ def _il_for(func: Any, level_name: str):
             il = getattr(func, attr)
             if il is not None:
                 return il
-        except Exception:
+        except Exception as e:
+            log_debug(f"_il_for: attribute {attr!r} failed: {e}")
             continue
     return None
 
@@ -93,8 +95,9 @@ def _patch_nop(bv: Any, ea: int) -> bool:
                 rc = meth(ea)
                 if rc is None or bool(rc):
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"_patch_nop {meth_name} failed at 0x{ea:x}: {e}")
+                continue
 
     size = max(1, get_instruction_len(bv, ea))
     nop_bytes = None
@@ -106,7 +109,8 @@ def _patch_nop(bv: Any, ea: int) -> bool:
                 b = asm("nop", ea)
                 if b:
                     nop_bytes = bytes(b)
-            except Exception:
+            except Exception as e:
+                log_debug(f"_patch_nop arch.assemble failed at 0x{ea:x}: {e}")
                 nop_bytes = None
     if not nop_bytes:
         nop_bytes = b"\x90"
@@ -117,7 +121,8 @@ def _patch_nop(bv: Any, ea: int) -> bool:
         try:
             write(ea, data)
             return True
-        except Exception:
+        except Exception as e:
+            log_debug(f"_patch_nop bv.write failed at 0x{ea:x}: {e}")
             return False
     return False
 

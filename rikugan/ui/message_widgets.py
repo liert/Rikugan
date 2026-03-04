@@ -104,10 +104,42 @@ for _t in ("execute_python",):
 
 _DEFAULT_TOOL_COLOR = "#569cd6"  # blue
 
+_TOOL_GROUP_LABELS: Dict[str, tuple[str, str]] = {
+    "decompile_function": ("Decompiled", "function"),
+    "read_disassembly": ("Disassembled", "function"),
+    "read_function_disassembly": ("Disassembled", "function"),
+    "fetch_disassembly": ("Disassembled", "function"),
+    "search_strings": ("Searched", "string"),
+    "list_strings_filter": ("Searched", "string"),
+    "search_functions": ("Searched", "function"),
+    "search_functions_by_name": ("Searched", "function"),
+    "read_file": ("Read", "file"),
+}
+
 
 def _tool_color(name: str) -> str:
     """Look up tool color by base name (MCP prefix stripped)."""
     return _TOOL_COLORS.get(_strip_mcp_prefix(name), _DEFAULT_TOOL_COLOR)
+
+
+def _format_tool_group_label(tool_names: List[str]) -> str:
+    """Human-friendly group label for collapsed tool-call runs."""
+    count = len(tool_names)
+    if count <= 0:
+        return "0 tools called"
+
+    base_names = [_strip_mcp_prefix(name) for name in tool_names]
+    unique_names = {name for name in base_names if name}
+
+    if len(unique_names) == 1:
+        only_name = base_names[0]
+        template = _TOOL_GROUP_LABELS.get(only_name)
+        if template:
+            action, noun = template
+            suffix = "" if count == 1 else "s"
+            return f"{action} {count} {noun}{suffix}"
+
+    return f"{count} tool called" if count == 1 else f"{count} tools called"
 
 
 # ---------------------------------------------------------------------------
@@ -832,11 +864,7 @@ class ToolBatchWidget(QFrame):
 # ---------------------------------------------------------------------------
 
 class ToolGroupWidget(QFrame):
-    """Collapsible group that hides tool calls after the preview budget is exhausted.
-
-    Shows:  ▶ N tool calls   ✓
-    Clicking expands/collapses the contained tool widgets.
-    """
+    """Collapsible group for a consecutive run of tool calls."""
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
@@ -845,12 +873,13 @@ class ToolGroupWidget(QFrame):
         self._count = 0
         self._done = 0
         self._errors = 0
+        self._tool_names: List[str] = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 3, 6, 3)
         layout.setSpacing(0)
 
-        # Header: ▶ N tool calls  ✓
+        # Header: ▶ <summary label>  ✓
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(6)
@@ -862,7 +891,7 @@ class ToolGroupWidget(QFrame):
         self._toggle_btn.clicked.connect(self._toggle)
         header_layout.addWidget(self._toggle_btn)
 
-        self._label = QLabel("0 tool calls")
+        self._label = QLabel("0 tools called")
         self._label.setStyleSheet(
             "color: #808080; font-size: 11px; font-weight: bold;"
         )
@@ -882,9 +911,10 @@ class ToolGroupWidget(QFrame):
         self._body.setVisible(False)
         layout.addWidget(self._body)
 
-    def add_widget(self, widget: QWidget) -> None:
+    def add_widget(self, widget: QWidget, tool_name: str = "") -> None:
         """Add a tool widget into this group."""
         self._count += 1
+        self._tool_names.append(tool_name)
         self._body_layout.addWidget(widget)
         self._update_label()
 
@@ -896,7 +926,7 @@ class ToolGroupWidget(QFrame):
         self._update_status()
 
     def _update_label(self) -> None:
-        self._label.setText(f"{self._count} tool call{'s' if self._count != 1 else ''}")
+        self._label.setText(_format_tool_group_label(self._tool_names))
 
     def _update_status(self) -> None:
         if self._done >= self._count:

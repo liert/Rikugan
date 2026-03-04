@@ -14,8 +14,8 @@ try:
     ida_name = importlib.import_module("ida_name")
     idc = importlib.import_module("idc")
     idautils = importlib.import_module("idautils")
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 
 @tool(category="functions")

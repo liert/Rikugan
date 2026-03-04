@@ -79,22 +79,22 @@ class _ModelFetcher:
             provider.ensure_ready()
         except Exception as e:
             if self._alive:
-                self._queue.put(("error", str(e)))
+                self._queue.put(("error", provider_name, str(e)))
             return
 
         def _run():
             try:
                 models = provider.list_models()
                 if self._alive:
-                    self._queue.put(("models", models))
+                    self._queue.put(("models", provider_name, models))
             except Exception as e:
                 if self._alive:
-                    self._queue.put(("error", str(e)))
+                    self._queue.put(("error", provider_name, str(e)))
 
         threading.Thread(target=_run, daemon=True).start()
 
     def poll(self) -> Optional[tuple]:
-        """Non-blocking poll. Returns ('models', list) or ('error', str) or None."""
+        """Non-blocking poll. Returns ('models'|'error', provider_name, payload) or None."""
         try:
             return self._queue.get_nowait()
         except queue.Empty:
@@ -178,6 +178,7 @@ class SettingsDialog(QDialog):
         self._fetcher = _ModelFetcher(self._registry)
         self._fetched_models: List[ModelInfo] = []
         self._resolved_token: str = ""
+        self._model_restore_hint: str = self._config.provider.model.strip()
         self._shown = False
         self._closed = False
         self.setWindowTitle("Rikugan Settings")
@@ -351,6 +352,7 @@ class SettingsDialog(QDialog):
             return
         try:
             self._update_auth_status()
+            self._model_restore_hint = self._config.provider.model.strip()
             self._fetch_models()
         except Exception as e:
             log_error(f"SettingsDialog deferred init error: {e}")
@@ -362,8 +364,8 @@ class SettingsDialog(QDialog):
         try:
             self._init_timer.stop()
             self._poll_timer.stop()
-        except RuntimeError:
-            pass  # timer already destroyed during Qt cleanup  # noqa: S110
+        except RuntimeError as e:
+            log_debug(f"SettingsDialog.done timer cleanup: {e}")
         self._fetcher.shutdown()
         super().done(result)
 
@@ -377,7 +379,10 @@ class SettingsDialog(QDialog):
         if result is None:
             return
         try:
-            kind, data = result
+            kind, provider_name, data = result
+            # Ignore stale results from previous provider selections.
+            if provider_name != self._provider_combo.currentText():
+                return
             if kind == "models":
                 self._on_models_ready(data)
             elif kind == "error":
@@ -388,6 +393,9 @@ class SettingsDialog(QDialog):
     # --- Provider switching ---
 
     def _on_provider_changed(self, provider: str) -> None:
+        # Persist edits from the previous provider before switching.
+        self._sync_config_from_ui()
+
         # Use config.switch_provider() to snapshot current & restore saved
         self._config.switch_provider(provider)
 
@@ -402,6 +410,7 @@ class SettingsDialog(QDialog):
         self._temp_spin.setValue(self._config.provider.temperature)
         self._max_tokens_spin.setValue(self._config.provider.max_tokens)
         self._context_spin.setValue(self._config.provider.context_window)
+        self._model_restore_hint = self._config.provider.model.strip()
 
         # Auto-fill API base for providers that need it
         if provider == "ollama" and not self._api_base_edit.text().strip():
@@ -421,6 +430,7 @@ class SettingsDialog(QDialog):
         self._fetch_models()
 
     def _on_key_edited(self) -> None:
+        self._model_restore_hint = self._get_selected_model_id()
         self._update_auth_status()
         self._fetch_models()
 
@@ -478,7 +488,8 @@ class SettingsDialog(QDialog):
         self._fetch_btn.setEnabled(True)
         self._fetched_models = models
 
-        current_id = self._get_selected_model_id()
+        preferred_id = (self._model_restore_hint or "").strip()
+        current_id = preferred_id or self._get_selected_model_id()
         self._model_combo.clear()
         for m in models:
             label = f"{m.name}  ({m.id})" if m.name != m.id else m.id
@@ -496,6 +507,7 @@ class SettingsDialog(QDialog):
             # (e.g. stale error text, wrong provider), select the first one
             # instead of keeping garbage text in the editable combo.
             self._model_combo.setCurrentIndex(0)
+        self._model_restore_hint = ""
 
         if models:
             self._model_status.setText(f"{len(models)} models")
@@ -511,6 +523,7 @@ class SettingsDialog(QDialog):
         self._fetch_btn.setEnabled(True)
         self._model_status.setText(error)
         self._model_status.setStyleSheet("color: #f44747; font-size: 10px;")
+        self._model_restore_hint = ""
 
     def _update_generation_defaults(self) -> None:
         model_id = self._get_selected_model_id()

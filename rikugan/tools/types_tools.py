@@ -7,6 +7,7 @@ import json
 from typing import Annotated, List, Optional
 
 from ..core.errors import ToolError
+from ..core.logging import log_debug
 from .base import parse_addr, tool
 
 _HAS_HEXRAYS = False
@@ -18,13 +19,14 @@ try:
     ida_typeinf = importlib.import_module("ida_typeinf")
     idc = importlib.import_module("idc")
     _HAS_HEXRAYS = True
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 # ida_enum was removed in IDA 9.x (enums merged into ida_typeinf).
 try:
     ida_enum = importlib.import_module("ida_enum")
-except ImportError:
+except ImportError as e:
+    log_debug(f"ida_enum not available (IDA 9.x+): {e}")
     ida_enum = None  # type: ignore[assignment]
 
 
@@ -557,13 +559,15 @@ def get_type_libraries() -> str:
                 name = getattr(til, "name", None) or "(unnamed)"
                 desc = getattr(til, "desc", "") or ""
                 lines.append(f"  {name}" + (f" - {desc}" if desc else ""))
-    except (AttributeError, TypeError):
+    except (AttributeError, TypeError) as e:
+        log_debug(f"TIL base iteration not supported in this IDA version: {e}")
         # Fallback: just report the main TIL name
         try:
             ti = ida_typeinf.get_idati()
             name = getattr(ti, "name", "(unknown)")
             lines.append(f"  {name} (main)")
-        except Exception:
+        except Exception as e:
+            log_debug(f"Could not retrieve main TIL name: {e}")
             lines.append("  (enumeration not supported in this IDA version)")
 
     return "\n".join(lines)

@@ -101,8 +101,8 @@ class RikuganPlugmod(idaapi.plugmod_t):
                         mod = importlib.import_module(modname)
                         if ispkg:
                             _load_submodules(mod)
-                    except Exception:
-                        pass  # Non-critical: skip modules that fail to load
+                    except Exception as e:
+                        import sys; sys.stderr.write(f"[Rikugan] Skipping {modname}: {e}\n")
 
             _load_submodules(rikugan)
             _log("_toggle_panel: all rikugan modules loaded")
@@ -151,8 +151,8 @@ def _log(msg: str) -> None:
     idaapi.msg(f"[Rikugan] {msg}\n")
     try:
         importlib.import_module("rikugan.core.logging").log_trace(msg)
-    except Exception:
-        pass  # noqa: S110 — logging not yet available during bootstrap
+    except Exception as e:
+        import sys; sys.stderr.write(f"[Rikugan] log_trace unavailable during bootstrap: {e}\n")
 
 
 def PLUGIN_ENTRY():  # noqa: N802

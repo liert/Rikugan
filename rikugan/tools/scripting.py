@@ -8,6 +8,7 @@ import re
 import contextlib
 from typing import Annotated
 
+from ..core.logging import log_debug
 from .base import tool
 
 # Patterns that indicate process execution — blocked for safety.
@@ -39,8 +40,8 @@ def _get_base_namespace() -> dict:
         for mod_name in _IDA_MODULE_NAMES:
             try:
                 ns[mod_name] = importlib.import_module(mod_name)
-            except ImportError:
-                pass
+            except ImportError as e:
+                log_debug(f"Optional IDA module {mod_name!r} not available: {e}")
         _cached_namespace = ns
     # Return a copy so user code can't pollute the cache
     result: dict = {"__builtins__": __builtins__}

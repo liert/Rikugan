@@ -14,6 +14,7 @@ from ..core.host import (
     is_binary_ninja,
     is_ida,
 )
+from ..core.logging import log_debug
 
 if is_ida():
     try:
@@ -99,8 +100,8 @@ class ContextBar(QFrame):
         try:
             self._timer.stop()
             self._timer.timeout.disconnect(self._update_cursor)
-        except (RuntimeError, TypeError):
-            pass  # timer already destroyed during Qt cleanup
+        except (RuntimeError, TypeError) as e:
+            log_debug(f"ContextBar.stop: timer already destroyed: {e}")
 
     def set_address(self, addr: str) -> None:
         self._address_label[1].setText(addr)
@@ -131,5 +132,5 @@ class ContextBar(QFrame):
             self.set_address(f"0x{int(ea):x}")
             name = _function_name_at(int(ea))
             self.set_function(name or "\u2014")
-        except Exception:
-            pass  # Host API unavailable or internal error; timer keeps ticking safely
+        except Exception as e:
+            log_debug(f"ContextBar._update_cursor failed: {e}")

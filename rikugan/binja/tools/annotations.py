@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import (
     get_function_at,
@@ -24,12 +25,14 @@ def _set_function_type(func, t) -> bool:
             try:
                 meth(t)
                 return True
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"_set_function_type {name} failed: {e}")
+                continue
     try:
         setattr(func, "type", t)
         return True
-    except Exception:
+    except Exception as e:
+        log_debug(f"_set_function_type setattr failed: {e}")
         return False
 
 
@@ -92,8 +95,9 @@ def rename_variable(
             try:
                 meth(target, new_name)
                 return f"Renamed variable: {old_name} \u2192 {new_name}"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"rename_variable {meth_name} failed: {e}")
+                continue
 
     # Older APIs sometimes only expose create_user_var(var, type, name).
     for meth_name in ("create_user_var", "createUserVar"):
@@ -104,14 +108,16 @@ def rename_variable(
         if callable(t):
             try:
                 t = t()
-            except Exception:
+            except Exception as e:
+                log_debug(f"rename_variable type() call failed: {e}")
                 t = None
         try:
             if py_signature_accepts(meth, 3):
                 meth(target, t, new_name)
                 return f"Renamed variable: {old_name} \u2192 {new_name}"
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"rename_variable {meth_name} positional call failed: {e}")
+            continue
 
     return "Variable renaming is not supported by this Binary Ninja API version"
 
@@ -153,13 +159,15 @@ def set_function_comment(
             try:
                 meth(comment)
                 return f"Set function comment at 0x{int(getattr(func, 'start', ea)):x}"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"set_function_comment {name} failed: {e}")
+                continue
 
     try:
         setattr(func, "comment", comment)
         return f"Set function comment at 0x{int(getattr(func, 'start', ea)):x}"
-    except Exception:
+    except Exception as e:
+        log_debug(f"set_function_comment setattr failed: {e}")
         return f"Failed to set function comment at 0x{int(getattr(func, 'start', ea)):x}"
 
 
@@ -205,7 +213,8 @@ def set_type(
             try:
                 meth(ea, t)
                 return f"Set type at 0x{ea:x}: {type_string}"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"set_type {meth_name} failed at 0x{ea:x}: {e}")
+                continue
 
     return f"Failed to set type at 0x{ea:x}. Check syntax: {type_string}"

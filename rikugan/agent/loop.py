@@ -50,6 +50,126 @@ _STEP_EXECUTION_PROMPT = (
     "summary of what you accomplished."
 )
 
+# Static pseudo-tool schemas — don't depend on runtime state
+_EXPLORATION_REPORT_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "exploration_report",
+        "description": (
+            "Log a structured finding during binary exploration. "
+            "Call this whenever you discover something relevant to "
+            "the user's goal: a function's purpose, a key constant, "
+            "a data structure, or a hypothesis about what to change."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "description": "Type of finding.",
+                    "enum": ["function_purpose", "data_structure", "constant", "hypothesis",
+                             "string_ref", "import_usage", "patch_result", "general"],
+                },
+                "address": {"type": "integer", "description": "Address related to this finding (hex or decimal)."},
+                "function_name": {"type": "string", "description": "Name of the function (for function_purpose findings)."},
+                "summary": {"type": "string", "description": "Brief summary of the finding."},
+                "evidence": {"type": "string", "description": "Supporting evidence (e.g. decompiled code snippet)."},
+                "relevance": {"type": "string", "description": "How relevant to the user's goal.", "enum": ["low", "medium", "high"]},
+                "original_hex": {"type": "string", "description": "Original bytes as hex string (for patch_result category). E.g. '74 05'."},
+                "new_hex": {"type": "string", "description": "New patched bytes as hex string (for patch_result category). E.g. '75 05'."},
+            },
+            "required": ["category", "summary"],
+        },
+    },
+}
+_PHASE_TRANSITION_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "phase_transition",
+        "description": (
+            "Request to move to the next exploration phase. "
+            "Call with to_phase='plan' when you have identified "
+            "all locations that need to change and have formed "
+            "concrete hypotheses. Requires at least 1 relevant "
+            "function and 1 hypothesis logged via exploration_report."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "to_phase": {"type": "string", "description": "Target phase to transition to.", "enum": ["plan"]},
+                "reason": {"type": "string", "description": "Why you're ready to transition."},
+            },
+            "required": ["to_phase", "reason"],
+        },
+    },
+}
+_SAVE_MEMORY_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "save_memory",
+        "description": (
+            "Save a fact to persistent memory (RIKUGAN.md). "
+            "Use this to remember important findings across sessions: "
+            "function purposes, naming conventions, architecture notes, "
+            "or analysis results that would be useful in future sessions."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fact": {"type": "string", "description": "The fact or finding to remember."},
+                "category": {
+                    "type": "string",
+                    "description": "Category of the memory.",
+                    "enum": ["function_purpose", "architecture", "naming_convention",
+                             "prior_analysis", "data_structure", "general"],
+                },
+            },
+            "required": ["fact", "category"],
+        },
+    },
+}
+_SPAWN_SUBAGENT_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "spawn_subagent",
+        "description": (
+            "Spawn an isolated subagent to handle a complex subtask. "
+            "The subagent has its own context window and can use all "
+            "available tools. It returns a concise summary of its "
+            "findings. Use this to delegate research-heavy tasks "
+            "(e.g. 'analyze all functions referencing the score string') "
+            "without filling your own context with raw tool output."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "The task for the subagent to perform."},
+                "max_turns": {"type": "integer", "description": "Maximum turns for the subagent (default: 20)."},
+            },
+            "required": ["task"],
+        },
+    },
+}
+_ASK_USER_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "ask_user",
+        "description": (
+            "Ask the user a question and wait for their answer. "
+            "Use this when you need clarification, confirmation, "
+            "or a choice from the user before proceeding."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question to ask the user."},
+                "options": {"type": "array", "items": {"type": "string"}, "description": "Optional list of choices for the user."},
+            },
+            "required": ["question"],
+        },
+    },
+}
+
 
 class AgentLoop:
     """The core agentic loop: stream LLM -> execute tools -> repeat.
@@ -129,21 +249,24 @@ class AgentLoop:
         """Cancel the current run."""
         self._cancelled.set()
 
+    def _drain_queue(self, q: "queue.Queue[str]") -> None:
+        """Remove any stale item from a maxsize=1 queue (non-blocking)."""
+        # q.empty() is a non-blocking check; TOCTOU is acceptable here
+        # because the subsequent put() is the only writer on the caller thread.
+        if not q.empty():
+            try:
+                q.get_nowait()
+            except queue.Empty:
+                pass  # race: another consumer drained between empty() and get_nowait()
+
     def submit_user_answer(self, answer: str) -> None:
         """Submit an answer to an ask_user question (called from UI thread)."""
-        # Drain any stale value, then put the new one
-        try:
-            self._user_answer_queue.get_nowait()
-        except queue.Empty:
-            pass
+        self._drain_queue(self._user_answer_queue)
         self._user_answer_queue.put(answer)
 
     def submit_tool_approval(self, decision: str) -> None:
         """Submit tool approval decision: 'allow', 'allow_all', or 'deny'."""
-        try:
-            self._tool_approval_queue.get_nowait()
-        except queue.Empty:
-            pass
+        self._drain_queue(self._tool_approval_queue)
         self._tool_approval_queue.put(decision)
 
     def _check_cancelled(self) -> None:
@@ -157,7 +280,7 @@ class AgentLoop:
             try:
                 return q.get(timeout=0.5)
             except queue.Empty:
-                continue
+                continue  # poll timeout — retry until item arrives or cancelled
 
     def _build_system_prompt(self) -> str:
         binary_info = None
@@ -246,7 +369,7 @@ class AgentLoop:
                 yield TurnEvent.cancelled_event()
                 return
             except ProviderError as e:
-                yield TurnEvent.error_event(str(e))
+                yield TurnEvent.error_event(self._format_provider_error_for_user(e))
                 return
 
             if assistant_text:
@@ -367,7 +490,7 @@ class AgentLoop:
                 self._clear_exploration_state()
                 return
             except ProviderError as e:
-                yield TurnEvent.error_event(str(e))
+                yield TurnEvent.error_event(self._format_provider_error_for_user(e))
                 self._clear_exploration_state()
                 return
 
@@ -421,6 +544,194 @@ class AgentLoop:
 
             yield TurnEvent.turn_end(state.total_turns)
 
+    def _run_exploration_phase2_plan(
+        self, state: "ExplorationState", exploration_system: str, user_goal: str,
+    ) -> Generator[TurnEvent, None, Optional[List[str]]]:
+        """Phase 2: synthesize a modification plan from gathered findings.
+
+        Returns the parsed step list, or None if planning failed/was rejected.
+        """
+        knowledge_summary = state.knowledge_base.to_summary()
+        plan_prompt = PLAN_SYNTHESIS_PROMPT.format(knowledge_summary=knowledge_summary)
+        self.session.add_message(Message(role=Role.USER, content=plan_prompt))
+
+        state.total_turns += 1
+        yield TurnEvent.turn_start(state.total_turns)
+        try:
+            plan_text, _, usage, _ = yield from self._stream_llm_turn(
+                exploration_system, None,  # text-only, no tools
+            )
+        except CancellationError:
+            yield TurnEvent.cancelled_event()
+            return None
+        except ProviderError as e:
+            yield TurnEvent.error_event(self._format_provider_error_for_user(e))
+            return None
+
+        if plan_text:
+            yield TurnEvent.text_done(plan_text)
+        self.session.add_message(Message(role=Role.ASSISTANT, content=plan_text, token_usage=usage))
+        yield TurnEvent.turn_end(state.total_turns)
+
+        steps = self._parse_plan(plan_text)
+        if not steps:
+            yield TurnEvent.error_event(
+                "Failed to generate a valid modification plan from exploration findings."
+            )
+            return None
+
+        yield TurnEvent.plan_generated(steps)
+
+        # Build ModificationPlan from parsed steps
+        changes: List[PlannedChange] = []
+        for i, step in enumerate(steps):
+            addr_match = re.search(r"0x([0-9a-fA-F]+)", step)
+            addr = int(addr_match.group(1), 16) if addr_match else 0
+            changes.append(PlannedChange(
+                index=i, target_address=addr,
+                current_behavior="", proposed_behavior=step, patch_strategy=step,
+            ))
+        state.modification_plan = ModificationPlan(changes=changes, rationale=plan_text)
+
+        # User approval gate
+        yield TurnEvent.user_question(
+            "Do you want to execute this modification plan?",
+            ["Approve", "Reject"], "__plan_approval__",
+        )
+        answer = self._wait_for_queue(self._user_answer_queue).strip().lower()
+        if answer not in ("approve", "1", "yes", "y"):
+            yield TurnEvent.error_event("Modification plan rejected by user.")
+            return None
+
+        state.transition_to(ExplorationPhase.EXECUTE)
+        yield TurnEvent.exploration_phase_change("plan", "execute", "Plan approved. Executing patches.")
+        self._persist_plan(user_goal, steps)
+        return steps
+
+    def _run_exploration_phase3_execute(
+        self, state: "ExplorationState", steps: List[str],
+        exploration_system: str, tools_schema: List,
+    ) -> Generator[TurnEvent, None, bool]:
+        """Phase 3: execute each planned patch step. Returns True if completed."""
+        for i, step_desc in enumerate(steps):
+            self._check_cancelled()
+            state.execute_turns += 1
+            if state.execute_turns > state.max_execute_turns:
+                yield TurnEvent.error_event(
+                    f"Execute turn limit reached ({state.max_execute_turns}). "
+                    "Some patches may not have been applied."
+                )
+                return False
+
+            yield TurnEvent.plan_step_start(i, step_desc)
+            self.session.add_message(Message(
+                role=Role.USER,
+                content=EXECUTE_STEP_PROMPT.format(
+                    index=i + 1, total=len(steps), description=step_desc,
+                ),
+            ))
+
+            # Mini agent loop for this step
+            for _st in range(10):
+                self._check_cancelled()
+                state.total_turns += 1
+                yield TurnEvent.turn_start(state.total_turns)
+
+                try:
+                    a_text, t_calls, t_usage, r_parts = yield from self._stream_llm_turn(
+                        exploration_system, tools_schema,
+                    )
+                except CancellationError:
+                    yield TurnEvent.cancelled_event()
+                    return False
+                except ProviderError as e:
+                    yield TurnEvent.error_event(self._format_provider_error_for_user(e))
+                    return False
+
+                if a_text:
+                    yield TurnEvent.text_done(a_text)
+                a_msg = Message(
+                    role=Role.ASSISTANT, content=a_text,
+                    tool_calls=t_calls, token_usage=t_usage,
+                )
+                if r_parts is not None:
+                    a_msg._raw_parts = r_parts
+                self.session.add_message(a_msg)
+
+                if not t_calls:
+                    yield TurnEvent.turn_end(state.total_turns)
+                    break
+
+                t_results: List[ToolResult] = yield from self._execute_tool_calls(t_calls)
+                self.session.add_message(Message(role=Role.TOOL, tool_results=t_results))
+                yield TurnEvent.turn_end(state.total_turns)
+
+            yield TurnEvent.plan_step_done(i, "completed")
+        return True
+
+    def _run_exploration_phase4_save(self, state: "ExplorationState") -> Generator[TurnEvent, None, None]:
+        """Phase 4: prompt the user to save or discard applied patches."""
+        state.transition_to(ExplorationPhase.SAVE)
+        yield TurnEvent.exploration_phase_change("execute", "save", "All patches applied. Awaiting save decision.")
+
+        summary = PatchSummary(patches=list(state.patches_applied))
+        summary.compute()
+        patches_detail = [
+            {
+                "address": f"0x{p.address:x}",
+                "description": p.description,
+                "original": p.original_bytes.hex() if p.original_bytes else "",
+                "new": p.new_bytes.hex() if p.new_bytes else "",
+                "verified": p.verified,
+            }
+            for p in state.patches_applied
+        ]
+        yield TurnEvent.save_approval_request(
+            patch_count=len(state.patches_applied),
+            total_bytes=summary.total_bytes_modified,
+            all_verified=summary.all_verified,
+            patches_detail=patches_detail,
+        )
+
+        save_answer = self._wait_for_queue(self._user_answer_queue).strip().lower()
+        if save_answer in ("save all", "save", "1", "yes", "y"):
+            self.session.add_message(Message(role=Role.USER, content=(
+                "[SYSTEM] Patches are saved in the analysis database. "
+                "To create a patched binary:\n"
+                "- **IDA Pro**: File → Produce file → Create patched file\n"
+                "- **Binary Ninja**: File → Save / Save As"
+            )))
+            yield TurnEvent.save_completed(len(state.patches_applied), summary.total_bytes_modified)
+            log_info("Exploration mode: patches saved")
+        else:
+            rolled_back = False
+            if state.patches_applied:
+                rollback_parts = [
+                    (
+                        f"import ida_bytes; ida_bytes.patch_bytes(0x{p.address:x}, {repr(bytes(p.original_bytes))})"
+                        if self.host_name == "IDA Pro"
+                        else f"bv.write(0x{p.address:x}, {repr(bytes(p.original_bytes))})"
+                    )
+                    for p in reversed(state.patches_applied) if p.original_bytes
+                ]
+                if rollback_parts:
+                    try:
+                        self.tools.execute("execute_python", {"code": "; ".join(rollback_parts)})
+                        rolled_back = True
+                        log_info("Exploration mode: patches rolled back via execute_python")
+                    except Exception as e:
+                        log_error(f"Exploration mode: rollback failed: {e}")
+
+            discard_msg = (
+                "[SYSTEM] Patches discarded. Original bytes have been restored."
+                if rolled_back
+                else "[SYSTEM] Patches discarded. The in-memory changes persist "
+                     "until the analysis database is reloaded without saving."
+            )
+            self.session.add_message(Message(role=Role.USER, content=discard_msg))
+            yield TurnEvent.save_discarded(len(state.patches_applied), rolled_back)
+            log_info(f"Exploration mode: patches discarded by user (rolled_back={rolled_back})")
+
     def _run_exploration_mode(
         self,
         user_message: str,
@@ -428,268 +739,50 @@ class AgentLoop:
         tools_schema: List,
         explore_only: bool = False,
     ) -> Generator[TurnEvent, None, None]:
-        """Run the agent in exploration mode: explore → plan → patch → save.
-
-        A single continuous generator that transitions through phases,
-        keeping all accumulated context in the ExplorationState.
-        """
+        """Run the agent in exploration mode: explore → plan → patch → save."""
         state = ExplorationState(explore_only=explore_only)
         state.knowledge_base.user_goal = user_message
         self._exploration_state = state
 
-        # Safe default — avoid NameError if Phase 2 is skipped
-        steps: List[str] = []
-
-        # Augment system prompt with exploration instructions
         exploration_system = system_prompt + EXPLORATION_SYSTEM_ADDENDUM
-
         log_info(f"Exploration mode started: goal={user_message[:80]!r}, explore_only={explore_only}")
         yield TurnEvent.exploration_phase_change("", "explore", f"Starting exploration: {user_message[:60]}")
 
-        # ── Phase 1: EXPLORE ──────────────────────────────────────────
-        # Agent uses all tools + exploration_report + phase_transition
-        # Runs until agent calls phase_transition(to_phase="plan")
-        # or hits the turn limit.
-        #
-        # When NOT explore_only, Phase 1 runs as a subagent to keep
-        # the parent context clean for Phases 2-4.  The subagent gets
-        # its own session (context window), and only the structured
-        # KnowledgeBase summary comes back to the parent.
-
-        use_subagent = not explore_only  # subagent for /modify, inline for /explore
-
-        if use_subagent:
-            # ── Subagent exploration ──
+        # Phase 1: EXPLORE — subagent for /modify, inline for /explore
+        if not explore_only:
             yield from self._run_phase1_subagent(state, user_message, exploration_system)
         else:
-            # ── Inline exploration (explore-only mode) ──
             yield from self._run_phase1_inline(state, exploration_system, tools_schema, explore_only)
 
-        # If explore-only, we're done after Phase 1
         if explore_only:
             summary = state.knowledge_base.to_summary()
             if summary:
-                summary_msg = Message(role=Role.USER, content=(
-                    "[SYSTEM] Exploration complete. Here is a summary of findings:\n\n"
-                    + summary
-                ))
-                self.session.add_message(summary_msg)
+                self.session.add_message(Message(role=Role.USER, content=(
+                    "[SYSTEM] Exploration complete. Here is a summary of findings:\n\n" + summary
+                )))
             log_info("Exploration mode finished (explore-only)")
             self._clear_exploration_state()
             return
 
-        # ── Phase 2: PLAN ─────────────────────────────────────────────
-        # Inject synthesis prompt with accumulated knowledge.
-        # Text-only turn — no tools.
-
+        # Phase 2: PLAN
         if state.phase == ExplorationPhase.PLAN:
-            knowledge_summary = state.knowledge_base.to_summary()
-            plan_prompt = PLAN_SYNTHESIS_PROMPT.format(knowledge_summary=knowledge_summary)
-            plan_msg = Message(role=Role.USER, content=plan_prompt)
-            self.session.add_message(plan_msg)
-
-            state.total_turns += 1
-            yield TurnEvent.turn_start(state.total_turns)
-            try:
-                plan_text, _, usage, _ = yield from self._stream_llm_turn(
-                    exploration_system, None,  # text-only, no tools
-                )
-            except (CancellationError, ProviderError) as e:
-                yield TurnEvent.error_event(str(e))
+            steps = yield from self._run_exploration_phase2_plan(state, exploration_system, user_message)
+            if steps is None:
                 self._clear_exploration_state()
                 return
+        else:
+            steps = []
 
-            if plan_text:
-                yield TurnEvent.text_done(plan_text)
-
-            plan_msg_resp = Message(role=Role.ASSISTANT, content=plan_text, token_usage=usage)
-            self.session.add_message(plan_msg_resp)
-            yield TurnEvent.turn_end(state.total_turns)
-
-            # Parse the plan into steps
-            steps = self._parse_plan(plan_text)
-            if not steps:
-                yield TurnEvent.error_event(
-                    "Failed to generate a valid modification plan from exploration findings."
-                )
-                self._clear_exploration_state()
-                return
-
-            yield TurnEvent.plan_generated(steps)
-
-            # Build ModificationPlan from parsed steps — extract addresses from
-            # step text where possible (e.g. "Patch JZ at 0x401248 to JNZ")
-            changes: List[PlannedChange] = []
-            for i, step in enumerate(steps):
-                addr_match = re.search(r"0x([0-9a-fA-F]+)", step)
-                addr = int(addr_match.group(1), 16) if addr_match else 0
-                changes.append(PlannedChange(
-                    index=i, target_address=addr,
-                    current_behavior="", proposed_behavior=step,
-                    patch_strategy=step,
-                ))
-            state.modification_plan = ModificationPlan(
-                changes=changes,
-                rationale=plan_text,
-            )
-
-            # ── User approval gate ────────────────────────────────────
-            yield TurnEvent.user_question(
-                "Do you want to execute this modification plan?",
-                ["Approve", "Reject"],
-                "__plan_approval__",
-            )
-
-            answer = self._wait_for_queue(self._user_answer_queue).strip().lower()
-            if answer not in ("approve", "1", "yes", "y"):
-                yield TurnEvent.error_event("Modification plan rejected by user.")
-                self._clear_exploration_state()
-                return
-
-            state.transition_to(ExplorationPhase.EXECUTE)
-            yield TurnEvent.exploration_phase_change("plan", "execute", "Plan approved. Executing patches.")
-
-            # Persist the approved plan to RIKUGAN.md for cross-session reference
-            self._persist_plan(user_message, steps)
-
-        # ── Phase 3: EXECUTE ──────────────────────────────────────────
-        # Execute each planned change using the smart-patch methodology.
-        # Patches are in-memory only.
-
+        # Phase 3: EXECUTE
         if state.phase == ExplorationPhase.EXECUTE:
-            for i, step_desc in enumerate(steps):
-                self._check_cancelled()
-                state.execute_turns += 1
-
-                if state.execute_turns > state.max_execute_turns:
-                    yield TurnEvent.error_event(
-                        f"Execute turn limit reached ({state.max_execute_turns}). "
-                        "Some patches may not have been applied."
-                    )
-                    break
-
-                yield TurnEvent.plan_step_start(i, step_desc)
-
-                execute_prompt = EXECUTE_STEP_PROMPT.format(
-                    index=i + 1, total=len(steps), description=step_desc,
-                )
-                exec_msg = Message(role=Role.USER, content=execute_prompt)
-                self.session.add_message(exec_msg)
-
-                # Mini agent loop for this step
-                for _st in range(10):
-                    self._check_cancelled()
-                    state.total_turns += 1
-                    yield TurnEvent.turn_start(state.total_turns)
-
-                    try:
-                        a_text, t_calls, t_usage, r_parts = yield from self._stream_llm_turn(
-                            exploration_system, tools_schema,
-                        )
-                    except CancellationError:
-                        yield TurnEvent.cancelled_event()
-                        self._clear_exploration_state()
-                        return
-                    except ProviderError as e:
-                        yield TurnEvent.error_event(str(e))
-                        self._clear_exploration_state()
-                        return
-
-                    if a_text:
-                        yield TurnEvent.text_done(a_text)
-
-                    a_msg = Message(
-                        role=Role.ASSISTANT, content=a_text,
-                        tool_calls=t_calls, token_usage=t_usage,
-                    )
-                    if r_parts is not None:
-                        a_msg._raw_parts = r_parts
-                    self.session.add_message(a_msg)
-
-                    if not t_calls:
-                        yield TurnEvent.turn_end(state.total_turns)
-                        break
-
-                    t_results: List[ToolResult] = yield from self._execute_tool_calls(t_calls)
-                    t_msg = Message(role=Role.TOOL, tool_results=t_results)
-                    self.session.add_message(t_msg)
-                    yield TurnEvent.turn_end(state.total_turns)
-
-                yield TurnEvent.plan_step_done(i, "completed")
-
-            # ── Phase 4: SAVE ─────────────────────────────────────────
-            state.transition_to(ExplorationPhase.SAVE)
-            yield TurnEvent.exploration_phase_change("execute", "save", "All patches applied. Awaiting save decision.")
-
-            # Build patch summary for the save approval UI
-            summary = PatchSummary(patches=list(state.patches_applied))
-            summary.compute()
-            patches_detail = [
-                {
-                    "address": f"0x{p.address:x}",
-                    "description": p.description,
-                    "original": p.original_bytes.hex() if p.original_bytes else "",
-                    "new": p.new_bytes.hex() if p.new_bytes else "",
-                    "verified": p.verified,
-                }
-                for p in state.patches_applied
-            ]
-
-            # Emit the structured save approval request
-            yield TurnEvent.save_approval_request(
-                patch_count=len(state.patches_applied),
-                total_bytes=summary.total_bytes_modified,
-                all_verified=summary.all_verified,
-                patches_detail=patches_detail,
+            ok = yield from self._run_exploration_phase3_execute(
+                state, steps, exploration_system, tools_schema,
             )
-
-            save_answer = self._wait_for_queue(self._user_answer_queue).strip().lower()
-            if save_answer in ("save all", "save", "1", "yes", "y"):
-                # Patches are already in the analysis database (IDB/BNDB).
-                # Inform the user how to persist.
-                save_info = Message(role=Role.USER, content=(
-                    "[SYSTEM] Patches are saved in the analysis database. "
-                    "To create a patched binary:\n"
-                    "- **IDA Pro**: File → Produce file → Create patched file\n"
-                    "- **Binary Ninja**: File → Save / Save As"
-                ))
-                self.session.add_message(save_info)
-                yield TurnEvent.save_completed(len(state.patches_applied), summary.total_bytes_modified)
-                log_info("Exploration mode: patches saved")
-            else:
-                # Attempt to roll back patches if we have original bytes
-                rolled_back = False
-                if state.patches_applied:
-                    rollback_parts = []
-                    for p in reversed(state.patches_applied):
-                        if p.original_bytes:
-                            byte_literal = repr(bytes(p.original_bytes))
-                            rollback_parts.append(
-                                f"import ida_bytes; ida_bytes.patch_bytes(0x{p.address:x}, {byte_literal})"
-                                if self.host_name == "IDA Pro"
-                                else f"bv.write(0x{p.address:x}, {byte_literal})"
-                            )
-                    if rollback_parts:
-                        rollback_code = "; ".join(rollback_parts)
-                        try:
-                            self.tools.execute("execute_python", {"code": rollback_code})
-                            rolled_back = True
-                            log_info("Exploration mode: patches rolled back via execute_python")
-                        except Exception as e:
-                            log_error(f"Exploration mode: rollback failed: {e}")
-
-                if rolled_back:
-                    discard_msg = Message(role=Role.USER, content=(
-                        "[SYSTEM] Patches discarded. Original bytes have been restored."
-                    ))
-                else:
-                    discard_msg = Message(role=Role.USER, content=(
-                        "[SYSTEM] Patches discarded. The in-memory changes persist "
-                        "until the analysis database is reloaded without saving."
-                    ))
-                self.session.add_message(discard_msg)
-                yield TurnEvent.save_discarded(len(state.patches_applied), rolled_back)
-                log_info(f"Exploration mode: patches discarded by user (rolled_back={rolled_back})")
+            if not ok:
+                self._clear_exploration_state()
+                return
+            # Phase 4: SAVE
+            yield from self._run_exploration_phase4_save(state)
 
         log_info("Exploration mode finished")
         self._clear_exploration_state()
@@ -898,8 +991,11 @@ class AgentLoop:
         yield TurnEvent.turn_start(1)
         try:
             plan_text, _, usage, _ = yield from self._stream_llm_turn(system_prompt, None)
-        except (CancellationError, ProviderError) as e:
-            yield TurnEvent.error_event(str(e))
+        except CancellationError:
+            yield TurnEvent.cancelled_event()
+            return
+        except ProviderError as e:
+            yield TurnEvent.error_event(self._format_provider_error_for_user(e))
             return
 
         if plan_text:
@@ -933,6 +1029,15 @@ class AgentLoop:
             self._check_cancelled()
             yield from self._execute_step(i, step_desc, system_prompt, tools_schema)
 
+    def _format_provider_error_for_user(self, error: ProviderError) -> str:
+        """Return a user-facing provider error message for chat display."""
+        provider = error.provider or self.config.provider.name or "provider"
+        detail = str(error).strip() or "Request failed."
+
+        if isinstance(error, RateLimitError):
+            return f"{provider}: rate limit exceeded. {detail}"
+        return f"{provider}: {detail}"
+
     def _stream_llm_turn(
         self, system_prompt: str, tools_schema: Optional[List],
         max_retries: int = 3,
@@ -945,30 +1050,36 @@ class AgentLoop:
         """
         last_error: Optional[Exception] = None
         for attempt in range(max_retries):
-            if attempt > 0:
-                # Exponential backoff: 1s, 2s, 4s...
-                backoff = min(2 ** (attempt - 1), 10)
-                if isinstance(last_error, RateLimitError) and last_error.retry_after > 0:
-                    backoff = last_error.retry_after
-                yield TurnEvent.text_delta(
-                    f"\n[Retrying in {backoff:.0f}s... (attempt {attempt + 1}/{max_retries})]\n"
-                )
-                deadline = time.monotonic() + backoff
-                while time.monotonic() < deadline:
-                    self._check_cancelled()
-                    time.sleep(min(0.5, deadline - time.monotonic()))
-
             try:
                 result = yield from self._stream_llm_turn_inner(system_prompt, tools_schema)
                 return result
             except (RateLimitError,) as e:
                 last_error = e
                 log_error(f"Retryable error (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    backoff = e.retry_after if e.retry_after > 0 else min(2 ** attempt, 10)
+                    yield TurnEvent.error_event(
+                        f"{self._format_provider_error_for_user(e)} "
+                        f"Retrying in {backoff:.0f}s (attempt {attempt + 2}/{max_retries})."
+                    )
+                    deadline = time.monotonic() + backoff
+                    while time.monotonic() < deadline:
+                        self._check_cancelled()
+                        time.sleep(min(0.5, deadline - time.monotonic()))
                 continue
             except ProviderError as e:
                 if e.retryable and attempt < max_retries - 1:
                     last_error = e
                     log_error(f"Retryable provider error (attempt {attempt + 1}/{max_retries}): {e}")
+                    backoff = min(2 ** attempt, 10)
+                    yield TurnEvent.error_event(
+                        f"{self._format_provider_error_for_user(e)} "
+                        f"Retrying in {backoff:.0f}s (attempt {attempt + 2}/{max_retries})."
+                    )
+                    deadline = time.monotonic() + backoff
+                    while time.monotonic() < deadline:
+                        self._check_cancelled()
+                        time.sleep(min(0.5, deadline - time.monotonic()))
                     continue
                 raise
 
@@ -1145,6 +1256,231 @@ class AgentLoop:
             return True
         return decision == "allow"
 
+    def _handle_exploration_report_tool(
+        self, tc: ToolCall, state: "ExplorationState",
+    ) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle the exploration_report pseudo-tool."""
+        category = tc.arguments.get("category", "general")
+        address_raw = tc.arguments.get("address")
+        address = None
+        if address_raw is not None:
+            try:
+                address = int(str(address_raw), 0)
+            except (ValueError, TypeError) as e:
+                log_debug(f"exploration_report: bad address {address_raw!r}: {e}")
+        summary = tc.arguments.get("summary", "")
+        evidence = tc.arguments.get("evidence", "")
+        relevance = tc.arguments.get("relevance", "medium")
+
+        state.knowledge_base.add_finding(Finding(
+            category=category, address=address,
+            summary=summary, evidence=evidence, relevance=relevance,
+        ))
+        if category == "function_purpose" and address is not None:
+            func_name = tc.arguments.get("function_name", f"sub_{address:x}")
+            state.knowledge_base.add_function(FunctionInfo(
+                address=address, name=func_name,
+                summary=summary, relevance=relevance,
+            ))
+        if category == "patch_result" and address is not None:
+            original_hex = tc.arguments.get("original_hex", "")
+            new_hex = tc.arguments.get("new_hex", "")
+            try:
+                original_bytes = bytes.fromhex(original_hex.replace(" ", "")) if original_hex else b""
+            except ValueError:
+                original_bytes = b""
+            try:
+                new_bytes = bytes.fromhex(new_hex.replace(" ", "")) if new_hex else b""
+            except ValueError:
+                new_bytes = b""
+            patch_record = PatchRecord(
+                address=address, original_bytes=original_bytes, new_bytes=new_bytes,
+                description=summary,
+                verified="verif" in evidence.lower() or "confirm" in evidence.lower(),
+                verification_result=evidence,
+            )
+            state.patches_applied.append(patch_record)
+            yield TurnEvent.patch_applied(address, summary, original_hex, new_hex)
+
+        content = f"Finding logged: [{category}] {summary}"
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=False)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, content, False)
+        yield TurnEvent.exploration_finding(category, summary, address, relevance)
+        return tr
+
+    def _handle_phase_transition_tool(
+        self, tc: ToolCall, state: "ExplorationState",
+    ) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle the phase_transition pseudo-tool."""
+        to_phase_str = tc.arguments.get("to_phase", "")
+        reason = tc.arguments.get("reason", "")
+        try:
+            to_phase = ExplorationPhase(to_phase_str)
+        except ValueError:
+            content = f"Invalid phase: '{to_phase_str}'. Valid: {[p.value for p in ExplorationPhase]}"
+            tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=True)
+            yield TurnEvent.tool_result_event(tc.id, tc.name, content, True)
+            return tr
+
+        allowed, deny_reason = state.can_transition_to(to_phase)
+        if not allowed:
+            content = f"Cannot transition to {to_phase_str}: {deny_reason}"
+            tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=True)
+            yield TurnEvent.tool_result_event(tc.id, tc.name, content, True)
+            return tr
+
+        old_phase = state.phase.value
+        state.transition_to(to_phase)
+        content = f"Phase transition: {old_phase} → {to_phase_str}. {reason}"
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=False)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, content, False)
+        yield TurnEvent.exploration_phase_change(old_phase, to_phase_str, reason)
+        return tr
+
+    def _handle_save_memory_tool(self, tc: ToolCall) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle the save_memory pseudo-tool."""
+        fact = tc.arguments.get("fact", "")
+        category = tc.arguments.get("category", "general")
+        if not fact:
+            content = "Error: 'fact' is required."
+            is_err = True
+        else:
+            idb_dir = os.path.dirname(self.session.idb_path) if self.session.idb_path else ""
+            if not idb_dir:
+                content = "Error: No IDB/BNDB path set; cannot determine where to save memory."
+                is_err = True
+            else:
+                md_path = os.path.join(idb_dir, "RIKUGAN.md")
+                try:
+                    if not os.path.exists(md_path):
+                        with open(md_path, "w", encoding="utf-8") as f:
+                            f.write(
+                                "# Rikugan Persistent Memory\n\n"
+                                "This file persists across sessions. "
+                                "The agent reads the first 200 lines into its system prompt.\n\n"
+                            )
+                    with open(md_path, "a", encoding="utf-8") as f:
+                        f.write(f"- [{category}] {fact}\n")
+                    content = f"Saved to RIKUGAN.md: [{category}] {fact}"
+                    is_err = False
+                    log_info(f"save_memory: [{category}] {fact[:80]}")
+                except OSError as e:
+                    content = f"Error writing RIKUGAN.md: {e}"
+                    is_err = True
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=is_err)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, content, is_err)
+        return tr
+
+    def _handle_spawn_subagent_tool(self, tc: ToolCall) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle the spawn_subagent pseudo-tool."""
+        task = tc.arguments.get("task", "")
+        max_turns = tc.arguments.get("max_turns", 20)
+        if not task:
+            content = "Error: 'task' is required."
+            is_err = True
+        else:
+            try:
+                runner = SubagentRunner(
+                    provider=self.provider, tool_registry=self.tools,
+                    config=self.config, host_name=self.host_name,
+                    skill_registry=self.skills, parent_loop=self,
+                )
+                content = yield from runner.run_task(task, max_turns=max_turns)
+                content = content or "(Subagent produced no output)"
+                is_err = False
+            except Exception as e:
+                content = f"Subagent error: {e}"
+                is_err = True
+                log_error(f"spawn_subagent failed: {e}")
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=is_err)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, content, is_err)
+        return tr
+
+    def _handle_activate_skill_tool(self, tc: ToolCall) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle the activate_skill pseudo-tool."""
+        slug = tc.arguments.get("slug", "")
+        skill = self.skills.get(slug) if self.skills else None
+        if skill is None:
+            content = f"Skill '{slug}' not found."
+            is_err = True
+        else:
+            content = f"[Skill: {skill.name}]\n\n{skill.body}"
+            is_err = False
+            log_debug(f"Agent activated skill: /{slug}")
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=is_err)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, content, is_err)
+        return tr
+
+    def _handle_ask_user_tool(self, tc: ToolCall) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle the ask_user pseudo-tool."""
+        question = tc.arguments.get("question", "")
+        options = tc.arguments.get("options", [])
+        yield TurnEvent.user_question(question, options, tc.id)
+        answer = self._wait_for_queue(self._user_answer_queue)
+        content = f"User answered: {answer}"
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=False)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, content, False)
+        return tr
+
+    def _execute_single_tool(self, tc: ToolCall) -> Generator[TurnEvent, None, ToolResult]:
+        """Handle approval gating, mutation tracking, and execution of a real tool."""
+        # execute_python always requires explicit approval
+        if tc.name == "execute_python":
+            approved = yield from self._wait_for_approval(tc)
+            if not approved:
+                content = "Tool execution denied by user."
+                tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=True)
+                yield TurnEvent.tool_result_event(tc.id, tc.name, content, True)
+                return tr
+
+        defn = self.tools.get(tc.name)
+        is_mutating = defn is not None and defn.mutating
+
+        if is_mutating and self.config.approve_mutations:
+            approved = yield from self._wait_for_approval(tc)
+            if not approved:
+                content = "Mutation denied by user."
+                tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=content, is_error=True)
+                yield TurnEvent.tool_result_event(tc.id, tc.name, content, True)
+                return tr
+
+        pre_state: Dict[str, Any] = {}
+        if is_mutating:
+            pre_state = capture_pre_state(
+                tc.name, tc.arguments,
+                lambda name, args: self.tools.execute(name, args),
+            )
+
+        log_debug(f"Executing tool {tc.name}")
+        try:
+            result = self.tools.execute(tc.name, tc.arguments)
+            is_error = False
+            self._consecutive_errors = 0
+            if is_mutating:
+                record = build_reverse_record(tc.name, tc.arguments, pre_state)
+                if record is not None:
+                    self._mutation_log.append(record)
+                    log_debug(f"Mutation recorded: {record.description}")
+                    yield TurnEvent.mutation_recorded(
+                        tool_name=record.tool_name, description=record.description,
+                        reversible=record.reversible, reverse_tool=record.reverse_tool,
+                        reverse_args=record.reverse_arguments,
+                    )
+        except ToolError as e:
+            result = f"Error: {e}"
+            is_error = True
+            self._consecutive_errors += 1
+            log_error(f"Tool {tc.name} error: {e}")
+        except Exception as e:
+            result = f"Unexpected error: {e}"
+            is_error = True
+            self._consecutive_errors += 1
+            log_error(f"Tool {tc.name} unexpected error: {e}\n{traceback.format_exc()}")
+
+        tr = ToolResult(tool_call_id=tc.id, name=tc.name, content=result, is_error=is_error)
+        yield TurnEvent.tool_result_event(tc.id, tc.name, result, is_error)
+        return tr
+
     def _execute_tool_calls(
         self, tool_calls: List[ToolCall],
     ) -> Generator[TurnEvent, None, List[ToolResult]]:
@@ -1152,296 +1488,152 @@ class AgentLoop:
         tool_results: List[ToolResult] = []
         for tc in tool_calls:
             self._check_cancelled()
-
-            # exploration_report: log a structured finding (exploration mode)
-            if tc.name == "exploration_report" and self._exploration_state is not None:
-                state = self._exploration_state
-                category = tc.arguments.get("category", "general")
-                address_raw = tc.arguments.get("address")
-                address = None
-                if address_raw is not None:
-                    try:
-                        address = int(str(address_raw), 0)
-                    except (ValueError, TypeError):
-                        pass
-                summary = tc.arguments.get("summary", "")
-                evidence = tc.arguments.get("evidence", "")
-                relevance = tc.arguments.get("relevance", "medium")
-
-                finding = Finding(
-                    category=category, address=address,
-                    summary=summary, evidence=evidence, relevance=relevance,
-                )
-                state.knowledge_base.add_finding(finding)
-
-                # If it's a function_purpose finding, also register in relevant_functions
-                if category == "function_purpose" and address is not None:
-                    func_name = tc.arguments.get("function_name", f"sub_{address:x}")
-                    state.knowledge_base.add_function(FunctionInfo(
-                        address=address, name=func_name,
-                        summary=summary, relevance=relevance,
-                    ))
-
-                # If it's a patch_result finding, build a PatchRecord and track it
-                if category == "patch_result" and address is not None:
-                    original_hex = tc.arguments.get("original_hex", "")
-                    new_hex = tc.arguments.get("new_hex", "")
-                    try:
-                        original_bytes = bytes.fromhex(original_hex.replace(" ", "")) if original_hex else b""
-                    except ValueError:
-                        original_bytes = b""
-                    try:
-                        new_bytes = bytes.fromhex(new_hex.replace(" ", "")) if new_hex else b""
-                    except ValueError:
-                        new_bytes = b""
-                    patch_record = PatchRecord(
-                        address=address,
-                        original_bytes=original_bytes,
-                        new_bytes=new_bytes,
-                        description=summary,
-                        verified="verif" in evidence.lower() or "confirm" in evidence.lower(),
-                        verification_result=evidence,
-                    )
-                    state.patches_applied.append(patch_record)
-                    yield TurnEvent.patch_applied(
-                        address, summary, original_hex, new_hex,
-                    )
-
-                content = f"Finding logged: [{category}] {summary}"
-                tr = ToolResult(
-                    tool_call_id=tc.id, name=tc.name,
-                    content=content, is_error=False,
-                )
-                tool_results.append(tr)
-                yield TurnEvent.tool_result_event(tc.id, tc.name, content, False)
-                yield TurnEvent.exploration_finding(category, summary, address, relevance)
-                continue
-
-            # phase_transition: request transition to next exploration phase
-            if tc.name == "phase_transition" and self._exploration_state is not None:
-                state = self._exploration_state
-                to_phase_str = tc.arguments.get("to_phase", "")
-                reason = tc.arguments.get("reason", "")
-                try:
-                    to_phase = ExplorationPhase(to_phase_str)
-                except ValueError:
-                    content = f"Invalid phase: '{to_phase_str}'. Valid: {[p.value for p in ExplorationPhase]}"
-                    tr = ToolResult(
-                        tool_call_id=tc.id, name=tc.name,
-                        content=content, is_error=True,
-                    )
-                    tool_results.append(tr)
-                    yield TurnEvent.tool_result_event(tc.id, tc.name, content, True)
-                    continue
-
-                allowed, deny_reason = state.can_transition_to(to_phase)
-                if not allowed:
-                    content = f"Cannot transition to {to_phase_str}: {deny_reason}"
-                    tr = ToolResult(
-                        tool_call_id=tc.id, name=tc.name,
-                        content=content, is_error=True,
-                    )
-                    tool_results.append(tr)
-                    yield TurnEvent.tool_result_event(tc.id, tc.name, content, True)
-                    continue
-
-                old_phase = state.phase.value
-                state.transition_to(to_phase)
-                content = f"Phase transition: {old_phase} → {to_phase_str}. {reason}"
-                tr = ToolResult(
-                    tool_call_id=tc.id, name=tc.name,
-                    content=content, is_error=False,
-                )
-                tool_results.append(tr)
-                yield TurnEvent.tool_result_event(tc.id, tc.name, content, False)
-                yield TurnEvent.exploration_phase_change(old_phase, to_phase_str, reason)
-                continue
-
-            # save_memory: persist a fact to RIKUGAN.md
-            if tc.name == "save_memory":
-                fact = tc.arguments.get("fact", "")
-                category = tc.arguments.get("category", "general")
-                if not fact:
-                    content = "Error: 'fact' is required."
-                    is_err = True
-                else:
-                    idb_dir = ""
-                    if self.session.idb_path:
-                        idb_dir = os.path.dirname(self.session.idb_path)
-                    if not idb_dir:
-                        content = "Error: No IDB/BNDB path set; cannot determine where to save memory."
-                        is_err = True
-                    else:
-                        md_path = os.path.join(idb_dir, "RIKUGAN.md")
-                        try:
-                            # Auto-create with template header if missing
-                            if not os.path.exists(md_path):
-                                with open(md_path, "w", encoding="utf-8") as f:
-                                    f.write(
-                                        "# Rikugan Persistent Memory\n\n"
-                                        "This file persists across sessions. "
-                                        "The agent reads the first 200 lines into its system prompt.\n\n"
-                                    )
-                            with open(md_path, "a", encoding="utf-8") as f:
-                                f.write(f"- [{category}] {fact}\n")
-                            content = f"Saved to RIKUGAN.md: [{category}] {fact}"
-                            is_err = False
-                            log_info(f"save_memory: [{category}] {fact[:80]}")
-                        except OSError as e:
-                            content = f"Error writing RIKUGAN.md: {e}"
-                            is_err = True
-                tr = ToolResult(
-                    tool_call_id=tc.id, name=tc.name,
-                    content=content, is_error=is_err,
-                )
-                tool_results.append(tr)
-                yield TurnEvent.tool_result_event(tc.id, tc.name, content, is_err)
-                continue
-
-            # spawn_subagent: run an isolated agent loop with its own context
-            if tc.name == "spawn_subagent":
-                task = tc.arguments.get("task", "")
-                max_turns = tc.arguments.get("max_turns", 20)
-                if not task:
-                    content = "Error: 'task' is required."
-                    is_err = True
-                else:
-                    try:
-                        runner = SubagentRunner(
-                            provider=self.provider,
-                            tool_registry=self.tools,
-                            config=self.config,
-                            host_name=self.host_name,
-                            skill_registry=self.skills,
-                            parent_loop=self,
-                        )
-                        content = yield from runner.run_task(task, max_turns=max_turns)
-                        if not content:
-                            content = "(Subagent produced no output)"
-                        is_err = False
-                    except Exception as e:
-                        content = f"Subagent error: {e}"
-                        is_err = True
-                        log_error(f"spawn_subagent failed: {e}")
-                tr = ToolResult(
-                    tool_call_id=tc.id, name=tc.name,
-                    content=content, is_error=is_err,
-                )
-                tool_results.append(tr)
-                yield TurnEvent.tool_result_event(tc.id, tc.name, content, is_err)
-                continue
-
-            # activate_skill: load skill body and return as tool result
-            if tc.name == "activate_skill":
-                slug = tc.arguments.get("slug", "")
-                skill = self.skills.get(slug) if self.skills else None
-                if skill is None:
-                    content = f"Skill '{slug}' not found."
-                    is_err = True
-                else:
-                    content = (
-                        f"[Skill: {skill.name}]\n\n"
-                        f"{skill.body}"
-                    )
-                    is_err = False
-                    log_debug(f"Agent activated skill: /{slug}")
-                tr = ToolResult(
-                    tool_call_id=tc.id, name=tc.name,
-                    content=content, is_error=is_err,
-                )
-                tool_results.append(tr)
-                yield TurnEvent.tool_result_event(tc.id, tc.name, content, is_err)
-                continue
-
-            # ask_user: block until the UI delivers an answer
-            if tc.name == "ask_user":
-                question = tc.arguments.get("question", "")
-                options = tc.arguments.get("options", [])
-                yield TurnEvent.user_question(question, options, tc.id)
-
-                answer = self._wait_for_queue(self._user_answer_queue)
-                tr = ToolResult(
-                    tool_call_id=tc.id, name=tc.name,
-                    content=f"User answered: {answer}", is_error=False,
-                )
-                tool_results.append(tr)
-                yield TurnEvent.tool_result_event(tc.id, tc.name, tr.content, False)
-                continue
-
-            # Tool approval gate — execute_python always needs explicit approval
-            if tc.name == "execute_python":
-                approved = yield from self._wait_for_approval(tc)
-                if not approved:
-                    tr = ToolResult(
-                        tool_call_id=tc.id, name=tc.name,
-                        content="Tool execution denied by user.", is_error=True,
-                    )
-                    tool_results.append(tr)
-                    yield TurnEvent.tool_result_event(tc.id, tc.name, tr.content, True)
-                    continue
-
-            # Mutation tracking: capture pre-state for mutating tools
-            defn = self.tools.get(tc.name)
-            is_mutating = defn is not None and defn.mutating
-
-            # Mutation approval gate — configurable per-session approval for
-            # mutating tools (rename, retype, set_comment, etc.)
-            if is_mutating and self.config.approve_mutations:
-                approved = yield from self._wait_for_approval(tc)
-                if not approved:
-                    tr = ToolResult(
-                        tool_call_id=tc.id, name=tc.name,
-                        content="Mutation denied by user.", is_error=True,
-                    )
-                    tool_results.append(tr)
-                    yield TurnEvent.tool_result_event(tc.id, tc.name, tr.content, True)
-                    continue
-
-            pre_state: Dict[str, Any] = {}
-            if is_mutating:
-                pre_state = capture_pre_state(
-                    tc.name, tc.arguments,
-                    lambda name, args: self.tools.execute(name, args),
-                )
-
-            log_debug(f"Executing tool {tc.name}")
-            try:
-                result = self.tools.execute(tc.name, tc.arguments)
-                is_error = False
-                self._consecutive_errors = 0
-
-                # Record mutation for undo
-                if is_mutating:
-                    record = build_reverse_record(tc.name, tc.arguments, pre_state)
-                    if record is not None:
-                        self._mutation_log.append(record)
-                        log_debug(f"Mutation recorded: {record.description}")
-                        yield TurnEvent.mutation_recorded(
-                            tool_name=record.tool_name,
-                            description=record.description,
-                            reversible=record.reversible,
-                            reverse_tool=record.reverse_tool,
-                            reverse_args=record.reverse_arguments,
-                        )
-            except ToolError as e:
-                result = f"Error: {e}"
-                is_error = True
-                self._consecutive_errors += 1
-                log_error(f"Tool {tc.name} error: {e}")
-            except Exception as e:
-                result = f"Unexpected error: {e}"
-                is_error = True
-                self._consecutive_errors += 1
-                log_error(f"Tool {tc.name} unexpected error: {e}\n{traceback.format_exc()}")
-
-            tr = ToolResult(
-                tool_call_id=tc.id, name=tc.name,
-                content=result, is_error=is_error,
-            )
+            state = self._exploration_state
+            if tc.name == "exploration_report" and state is not None:
+                tr = yield from self._handle_exploration_report_tool(tc, state)
+            elif tc.name == "phase_transition" and state is not None:
+                tr = yield from self._handle_phase_transition_tool(tc, state)
+            elif tc.name == "save_memory":
+                tr = yield from self._handle_save_memory_tool(tc)
+            elif tc.name == "spawn_subagent":
+                tr = yield from self._handle_spawn_subagent_tool(tc)
+            elif tc.name == "activate_skill":
+                tr = yield from self._handle_activate_skill_tool(tc)
+            elif tc.name == "ask_user":
+                tr = yield from self._handle_ask_user_tool(tc)
+            else:
+                tr = yield from self._execute_single_tool(tc)
             tool_results.append(tr)
-            yield TurnEvent.tool_result_event(tc.id, tc.name, result, is_error)
-
         return tool_results
+
+    def _build_tools_schema(self, active_skill: Any, use_exploration_mode: bool) -> list:
+        """Build the full tool schema list for a run, including pseudo-tools."""
+        tools_schema = self.tools.to_provider_format()
+
+        # Filter to skill-allowed tools if the skill restricts them
+        if active_skill and active_skill.allowed_tools:
+            allowed = set(active_skill.allowed_tools)
+            tools_schema = [
+                t for t in tools_schema
+                if t.get("function", {}).get("name") in allowed
+            ]
+
+        # activate_skill: dynamic because the slug enum depends on loaded skills
+        if self.skills and self.skills.list_slugs():
+            tools_schema.append({
+                "type": "function",
+                "function": {
+                    "name": "activate_skill",
+                    "description": (
+                        "Load a skill's full prompt and reference material into context. "
+                        "Call this when the user's request matches a skill's domain "
+                        "(e.g., activate 'malware-analysis' for malware tasks, "
+                        "'vuln-audit' for security audits, 'ida-scripting' or "
+                        "'binja-scripting' when you need to write scripts). "
+                        "The skill body will be returned so you can follow its methodology."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "slug": {
+                                "type": "string",
+                                "description": "The skill slug to activate.",
+                                "enum": self.skills.list_slugs(),
+                            },
+                        },
+                        "required": ["slug"],
+                    },
+                },
+            })
+
+        if use_exploration_mode:
+            tools_schema.append(_EXPLORATION_REPORT_SCHEMA)
+            tools_schema.append(_PHASE_TRANSITION_SCHEMA)
+
+        if self.session.idb_path:
+            tools_schema.append(_SAVE_MEMORY_SCHEMA)
+
+        tools_schema.append(_SPAWN_SUBAGENT_SCHEMA)
+        tools_schema.append(_ASK_USER_SCHEMA)
+        return tools_schema
+
+    def _run_normal_loop(
+        self, system_prompt: str, tools_schema: list,
+    ) -> Generator[TurnEvent, None, None]:
+        """Run the standard agentic while loop (non-plan, non-exploration)."""
+        max_turns = 100
+        turn = 0
+        while True:
+            self._check_cancelled()
+            turn += 1
+            if turn > max_turns:
+                yield TurnEvent.error_event(f"Reached max turns limit ({max_turns}).")
+                break
+            self.session.current_turn = turn
+            log_debug(f"Turn {turn} start")
+            yield TurnEvent.turn_start(turn)
+
+            # If tools were disabled due to consecutive errors, force text-only
+            turn_tools = None if self._tools_disabled_for_turn else tools_schema
+            self._tools_disabled_for_turn = False
+
+            try:
+                assistant_text, tool_calls, last_usage, raw_parts = yield from self._stream_llm_turn(
+                    system_prompt, turn_tools,
+                )
+            except CancellationError:
+                yield TurnEvent.cancelled_event()
+                return
+            except ProviderError as e:
+                log_error(f"Provider error: {e}")
+                yield TurnEvent.error_event(self._format_provider_error_for_user(e))
+                return
+
+            if assistant_text:
+                yield TurnEvent.text_done(assistant_text)
+
+            assistant_msg = Message(
+                role=Role.ASSISTANT, content=assistant_text,
+                tool_calls=tool_calls, token_usage=last_usage,
+            )
+            if raw_parts is not None:
+                assistant_msg._raw_parts = raw_parts
+            self.session.add_message(assistant_msg)
+
+            if not tool_calls:
+                self._consecutive_errors = 0
+                log_debug(f"Turn {turn} end (final)")
+                yield TurnEvent.turn_end(turn)
+                break
+
+            tool_results: List[ToolResult] = yield from self._execute_tool_calls(tool_calls)
+            self.session.add_message(Message(role=Role.TOOL, tool_results=tool_results))
+
+            # Consecutive error recovery: hint at 3, disable tools at 5
+            if self._consecutive_errors >= 5:
+                self._tools_disabled_for_turn = True
+                self._consecutive_errors = 0
+                self.session.add_message(Message(
+                    role=Role.USER,
+                    content=(
+                        "[SYSTEM] You have failed 5 consecutive tool calls. "
+                        "Tools are temporarily disabled. Explain what went wrong "
+                        "and what you were trying to do. The user may help you. "
+                        "Tools will be re-enabled on your next turn."
+                    ),
+                ))
+            elif self._consecutive_errors >= 3:
+                self.session.add_message(Message(
+                    role=Role.USER,
+                    content=(
+                        "[SYSTEM] You have failed 3 consecutive tool calls. "
+                        "Stop retrying the same approach. Try a different strategy "
+                        "or explain what is failing."
+                    ),
+                ))
+
+            log_debug(f"Turn {turn} end ({len(tool_calls)} tool calls)")
+            yield TurnEvent.turn_end(turn)
 
     def run(self, user_message: str) -> Generator[TurnEvent, None, None]:
         """Run the agent loop for a user message. Yields TurnEvents.
@@ -1454,7 +1646,7 @@ class AgentLoop:
         self.session.is_running = True
 
         try:
-            # Detect /plan, /modify, /explore prefixes before skill resolution
+            # Detect command prefixes before skill resolution
             use_plan_mode = False
             use_exploration_mode = False
             explore_only = False
@@ -1470,11 +1662,9 @@ class AgentLoop:
                 explore_only = True
                 user_message = stripped[9:].strip()
             elif stripped.lower() == "/memory":
-                # Show current RIKUGAN.md contents
                 yield from self._handle_memory_command()
                 return
             elif stripped.lower().startswith("/undo"):
-                # Undo last N mutations
                 yield from self._handle_undo_command(stripped)
                 return
             elif stripped.lower() == "/mcp":
@@ -1485,345 +1675,25 @@ class AgentLoop:
                 return
 
             user_message, active_skill = self._resolve_skill(user_message)
-
-            # If the skill specifies mode: exploration, activate exploration mode
             if active_skill and active_skill.mode == "exploration":
                 use_exploration_mode = True
 
-            user_msg = Message(role=Role.USER, content=user_message)
-            self.session.add_message(user_msg)
-
+            self.session.add_message(Message(role=Role.USER, content=user_message))
             system_prompt = self._build_system_prompt()
-            tools_schema = self.tools.to_provider_format()
-
-            # If active skill has allowed_tools, filter to only those
-            if active_skill and active_skill.allowed_tools:
-                allowed = set(active_skill.allowed_tools)
-                tools_schema = [
-                    t for t in tools_schema
-                    if t.get("function", {}).get("name") in allowed
-                ]
-
-            # Append the activate_skill pseudo-tool so the agent can load skills on demand
-            if self.skills and self.skills.list_slugs():
-                _ACTIVATE_SKILL_SCHEMA = {
-                    "type": "function",
-                    "function": {
-                        "name": "activate_skill",
-                        "description": (
-                            "Load a skill's full prompt and reference material into context. "
-                            "Call this when the user's request matches a skill's domain "
-                            "(e.g., activate 'malware-analysis' for malware tasks, "
-                            "'vuln-audit' for security audits, 'ida-scripting' or "
-                            "'binja-scripting' when you need to write scripts). "
-                            "The skill body will be returned so you can follow its methodology."
-                        ),
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "slug": {
-                                    "type": "string",
-                                    "description": "The skill slug to activate.",
-                                    "enum": self.skills.list_slugs(),
-                                },
-                            },
-                            "required": ["slug"],
-                        },
-                    },
-                }
-                tools_schema.append(_ACTIVATE_SKILL_SCHEMA)
-
-            # Append exploration pseudo-tools when in exploration mode
-            if use_exploration_mode:
-                _EXPLORATION_REPORT_SCHEMA = {
-                    "type": "function",
-                    "function": {
-                        "name": "exploration_report",
-                        "description": (
-                            "Log a structured finding during binary exploration. "
-                            "Call this whenever you discover something relevant to "
-                            "the user's goal: a function's purpose, a key constant, "
-                            "a data structure, or a hypothesis about what to change."
-                        ),
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "category": {
-                                    "type": "string",
-                                    "description": "Type of finding.",
-                                    "enum": [
-                                        "function_purpose", "data_structure",
-                                        "constant", "hypothesis", "string_ref",
-                                        "import_usage", "patch_result", "general",
-                                    ],
-                                },
-                                "address": {
-                                    "type": "integer",
-                                    "description": "Address related to this finding (hex or decimal).",
-                                },
-                                "function_name": {
-                                    "type": "string",
-                                    "description": "Name of the function (for function_purpose findings).",
-                                },
-                                "summary": {
-                                    "type": "string",
-                                    "description": "Brief summary of the finding.",
-                                },
-                                "evidence": {
-                                    "type": "string",
-                                    "description": "Supporting evidence (e.g. decompiled code snippet).",
-                                },
-                                "relevance": {
-                                    "type": "string",
-                                    "description": "How relevant to the user's goal.",
-                                    "enum": ["low", "medium", "high"],
-                                },
-                                "original_hex": {
-                                    "type": "string",
-                                    "description": "Original bytes as hex string (for patch_result category). E.g. '74 05'.",
-                                },
-                                "new_hex": {
-                                    "type": "string",
-                                    "description": "New patched bytes as hex string (for patch_result category). E.g. '75 05'.",
-                                },
-                            },
-                            "required": ["category", "summary"],
-                        },
-                    },
-                }
-                _PHASE_TRANSITION_SCHEMA = {
-                    "type": "function",
-                    "function": {
-                        "name": "phase_transition",
-                        "description": (
-                            "Request to move to the next exploration phase. "
-                            "Call with to_phase='plan' when you have identified "
-                            "all locations that need to change and have formed "
-                            "concrete hypotheses. Requires at least 1 relevant "
-                            "function and 1 hypothesis logged via exploration_report."
-                        ),
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "to_phase": {
-                                    "type": "string",
-                                    "description": "Target phase to transition to.",
-                                    "enum": ["plan"],
-                                },
-                                "reason": {
-                                    "type": "string",
-                                    "description": "Why you're ready to transition.",
-                                },
-                            },
-                            "required": ["to_phase", "reason"],
-                        },
-                    },
-                }
-                tools_schema.append(_EXPLORATION_REPORT_SCHEMA)
-                tools_schema.append(_PHASE_TRANSITION_SCHEMA)
-
-            # Append save_memory pseudo-tool for cross-session persistence
-            if self.session.idb_path:
-                _SAVE_MEMORY_SCHEMA = {
-                    "type": "function",
-                    "function": {
-                        "name": "save_memory",
-                        "description": (
-                            "Save a fact to persistent memory (RIKUGAN.md). "
-                            "Use this to remember important findings across sessions: "
-                            "function purposes, naming conventions, architecture notes, "
-                            "or analysis results that would be useful in future sessions."
-                        ),
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "fact": {
-                                    "type": "string",
-                                    "description": "The fact or finding to remember.",
-                                },
-                                "category": {
-                                    "type": "string",
-                                    "description": "Category of the memory.",
-                                    "enum": [
-                                        "function_purpose", "architecture",
-                                        "naming_convention", "prior_analysis",
-                                        "data_structure", "general",
-                                    ],
-                                },
-                            },
-                            "required": ["fact", "category"],
-                        },
-                    },
-                }
-                tools_schema.append(_SAVE_MEMORY_SCHEMA)
-
-            # Append spawn_subagent pseudo-tool for delegating complex subtasks
-            _SPAWN_SUBAGENT_SCHEMA = {
-                "type": "function",
-                "function": {
-                    "name": "spawn_subagent",
-                    "description": (
-                        "Spawn an isolated subagent to handle a complex subtask. "
-                        "The subagent has its own context window and can use all "
-                        "available tools. It returns a concise summary of its "
-                        "findings. Use this to delegate research-heavy tasks "
-                        "(e.g. 'analyze all functions referencing the score string') "
-                        "without filling your own context with raw tool output."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "task": {
-                                "type": "string",
-                                "description": "The task for the subagent to perform.",
-                            },
-                            "max_turns": {
-                                "type": "integer",
-                                "description": "Maximum turns for the subagent (default: 20).",
-                            },
-                        },
-                        "required": ["task"],
-                    },
-                },
-            }
-            tools_schema.append(_SPAWN_SUBAGENT_SCHEMA)
-
-            # Append the ask_user pseudo-tool so the LLM can ask the user
-            _ASK_USER_SCHEMA = {
-                "type": "function",
-                "function": {
-                    "name": "ask_user",
-                    "description": (
-                        "Ask the user a question and wait for their answer. "
-                        "Use this when you need clarification, confirmation, "
-                        "or a choice from the user before proceeding."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "question": {
-                                "type": "string",
-                                "description": "The question to ask the user.",
-                            },
-                            "options": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Optional list of choices for the user.",
-                            },
-                        },
-                        "required": ["question"],
-                    },
-                },
-            }
-            tools_schema.append(_ASK_USER_SCHEMA)
-
+            tools_schema = self._build_tools_schema(active_skill, use_exploration_mode)
             log_debug(f"Agent run started: {len(tools_schema)} tools, msg={user_message[:80]!r}")
 
-            # Exploration mode: explore → plan → patch → save
             if use_exploration_mode:
                 yield from self._run_exploration_mode(
-                    user_message, system_prompt, tools_schema,
-                    explore_only=explore_only,
+                    user_message, system_prompt, tools_schema, explore_only=explore_only,
                 )
                 return
 
-            # Plan mode: generate plan → approval → step-by-step execution
             if use_plan_mode or self.plan_mode:
                 yield from self._run_plan_mode(user_message, system_prompt, tools_schema)
                 return
 
-            max_turns = 100
-            turn = 0
-            while True:
-                self._check_cancelled()
-                turn += 1
-                if turn > max_turns:
-                    yield TurnEvent.error_event(f"Reached max turns limit ({max_turns}).")
-                    break
-                self.session.current_turn = turn
-                log_debug(f"Turn {turn} start")
-                yield TurnEvent.turn_start(turn)
-
-                # Stream LLM response
-                assistant_text = ""
-                tool_calls: List[ToolCall] = []
-                last_usage: Optional[TokenUsage] = None
-
-                # If tools were disabled due to consecutive errors, run
-                # text-only so the agent is forced to explain the problem.
-                turn_tools = None if self._tools_disabled_for_turn else tools_schema
-                self._tools_disabled_for_turn = False
-
-                try:
-                    # yield from propagates streamed TurnEvents to the caller
-                    # while the generator's return value (via StopIteration.value)
-                    # provides the accumulated result tuple (PEP 380).
-                    assistant_text, tool_calls, last_usage, raw_parts = yield from self._stream_llm_turn(
-                        system_prompt, turn_tools,
-                    )
-                except CancellationError:
-                    yield TurnEvent.cancelled_event()
-                    return
-                except ProviderError as e:
-                    log_error(f"Provider error: {e}")
-                    yield TurnEvent.error_event(str(e))
-                    return
-
-                if assistant_text:
-                    yield TurnEvent.text_done(assistant_text)
-
-                # Record assistant message
-                assistant_msg = Message(
-                    role=Role.ASSISTANT,
-                    content=assistant_text,
-                    tool_calls=tool_calls,
-                    token_usage=last_usage,
-                )
-                if raw_parts is not None:
-                    assistant_msg._raw_parts = raw_parts
-                self.session.add_message(assistant_msg)
-
-                # If no tool calls, we're done
-                if not tool_calls:
-                    self._consecutive_errors = 0
-                    log_debug(f"Turn {turn} end (final)")
-                    yield TurnEvent.turn_end(turn)
-                    break
-
-                # Execute tool calls
-                tool_results: List[ToolResult] = yield from self._execute_tool_calls(tool_calls)
-
-                # Record tool results as a message
-                tool_msg = Message(role=Role.TOOL, tool_results=tool_results)
-                self.session.add_message(tool_msg)
-
-                # Consecutive error recovery: hint at 3, force text-only at 5
-                if self._consecutive_errors >= 5:
-                    self._tools_disabled_for_turn = True
-                    self._consecutive_errors = 0
-                    hint = Message(
-                        role=Role.USER,
-                        content=(
-                            "[SYSTEM] You have failed 5 consecutive tool calls. "
-                            "Tools are temporarily disabled. Explain what went wrong "
-                            "and what you were trying to do. The user may help you. "
-                            "Tools will be re-enabled on your next turn."
-                        ),
-                    )
-                    self.session.add_message(hint)
-                elif self._consecutive_errors >= 3:
-                    hint = Message(
-                        role=Role.USER,
-                        content=(
-                            "[SYSTEM] You have failed 3 consecutive tool calls. "
-                            "Stop retrying the same approach. Try a different strategy "
-                            "or explain what is failing."
-                        ),
-                    )
-                    self.session.add_message(hint)
-
-                log_debug(f"Turn {turn} end ({len(tool_calls)} tool calls)")
-                yield TurnEvent.turn_end(turn)
+            yield from self._run_normal_loop(system_prompt, tools_schema)
 
         except CancellationError:
             yield TurnEvent.cancelled_event()

@@ -6,6 +6,7 @@ import importlib
 import os
 from typing import Any, Dict, List, Optional
 
+from ..core.logging import log_debug
 from ..core.types import ModelInfo, ProviderCapabilities
 from .openai_provider import OpenAIProvider
 
@@ -72,8 +73,8 @@ class OpenAICompatProvider(OpenAIProvider):
             if models:
                 models.sort(key=lambda x: x.id)
                 return models
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"list_models for {self._provider_name!r} failed: {e}")
         # Endpoint doesn't support /v1/models or returned nothing.
         # Return current model if set; otherwise empty (user types manually).
         if self.model:

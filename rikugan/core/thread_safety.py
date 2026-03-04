@@ -29,8 +29,8 @@ def _log(msg: str) -> None:
     try:
         from .logging import log_trace
         log_trace(msg)
-    except ImportError:
-        pass  # logging.py not yet loaded during early bootstrap
+    except ImportError as e:
+        import sys; sys.stderr.write(f"[Rikugan] thread_safety._log bootstrap: {e}\n")
 
 
 def idasync(func: F) -> F:

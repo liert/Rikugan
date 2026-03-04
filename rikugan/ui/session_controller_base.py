@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import copy
+import os
+import threading
+import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
@@ -19,6 +22,15 @@ if TYPE_CHECKING:
     from ..tools.registry import ToolRegistry
 else:
     ToolRegistry = Any
+
+
+def _normalize_db_path(path: str) -> str:
+    if not path:
+        return ""
+    try:
+        return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+    except Exception:
+        return path
 
 
 class SessionControllerBase:
@@ -39,10 +51,16 @@ class SessionControllerBase:
         )
         self._tool_registry = tool_registry_factory()
         self._skill_registry = SkillRegistry()
-        self._skill_registry.discover()
         self._mcp_manager = MCPManager()
-        self._mcp_manager.load_config()
-        self._idb_path = database_path_getter()
+        self._idb_path = _normalize_db_path(database_path_getter())
+        self._runtime_init_done = threading.Event()
+        self._runtime_shutdown = threading.Event()
+        self._runtime_init_thread = threading.Thread(
+            target=self._initialize_runtime,
+            daemon=True,
+            name="rikugan-runtime-init",
+        )
+        self._runtime_init_thread.start()
 
         # Multi-tab session management
         self._sessions: Dict[str, SessionState] = {}
@@ -53,7 +71,27 @@ class SessionControllerBase:
         self._runner: Optional[BackgroundAgentRunner] = None
         self._pending_messages: List[str] = []
 
-        self._mcp_manager.start_servers(self._tool_registry)
+    def _initialize_runtime(self) -> None:
+        """Load heavy runtime components off the UI path."""
+        started = time.perf_counter()
+        try:
+            if self._runtime_shutdown.is_set():
+                return
+            self._skill_registry.discover()
+
+            if self._runtime_shutdown.is_set():
+                return
+            self._mcp_manager.load_config()
+
+            if self._runtime_shutdown.is_set():
+                return
+            self._mcp_manager.start_servers(self._tool_registry)
+        except Exception as e:
+            log_error(f"Background runtime initialization failed: {e}")
+        finally:
+            self._runtime_init_done.set()
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            log_debug(f"Runtime initialization completed in {elapsed_ms} ms")
 
     # --- Tab / multi-session management ---
 
@@ -149,7 +187,13 @@ class SessionControllerBase:
 
     @property
     def skill_slugs(self) -> List[str]:
+        if not self._runtime_init_done.is_set():
+            return []
         return self._skill_registry.list_slugs()
+
+    @property
+    def runtime_ready(self) -> bool:
+        return self._runtime_init_done.is_set()
 
     @property
     def is_agent_running(self) -> bool:
@@ -160,6 +204,10 @@ class SessionControllerBase:
 
     def start_agent(self, user_message: str) -> Optional[str]:
         """Create provider + agent loop and start the background runner."""
+        if not self._runtime_init_done.is_set():
+            # Delay only the first agent start if background init is still running.
+            self._runtime_init_done.wait(timeout=10.0)
+
         try:
             provider = self._provider_registry.get_or_create(
                 self.config.provider.name,
@@ -234,6 +282,9 @@ class SessionControllerBase:
     def restore_sessions(self) -> List[Tuple[str, SessionState]]:
         """Load ALL saved sessions for the current idb_path and return (tab_id, session) pairs."""
         results: List[Tuple[str, SessionState]] = []
+        if not self._idb_path:
+            log_debug("Skipping session restore: no database path available")
+            return results
         try:
             history = SessionHistory(self.config)
             summaries = history.list_sessions(idb_path=self._idb_path)
@@ -259,6 +310,9 @@ class SessionControllerBase:
 
     def restore_session(self) -> Optional[SessionState]:
         """Legacy: restore only the latest session into the active tab."""
+        if not self._idb_path:
+            log_debug("Skipping session restore: no database path available")
+            return None
         try:
             history = SessionHistory(self.config)
             session = history.get_latest_session(idb_path=self._idb_path)
@@ -282,7 +336,7 @@ class SessionControllerBase:
                 except Exception as e:
                     log_error(f"Failed to save session {tab_id} on file change: {e}")
         self._sessions.clear()
-        self._idb_path = new_idb_path
+        self._idb_path = _normalize_db_path(new_idb_path)
         tab_id = self._create_session()
         self._active_tab_id = tab_id
 
@@ -296,6 +350,9 @@ class SessionControllerBase:
             session.model_name = self.config.provider.model
 
     def shutdown(self) -> None:
+        self._runtime_shutdown.set()
+        if self._runtime_init_thread.is_alive():
+            self._runtime_init_done.wait(timeout=1.0)
         if self._runner:
             self._runner.cancel()
             self._runner = None

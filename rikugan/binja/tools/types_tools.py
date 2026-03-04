@@ -7,6 +7,7 @@ import re
 from typing import Annotated, Any, Dict, Iterable, List, Optional, Tuple
 
 from ...core.errors import ToolError
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import (
     define_user_type,
@@ -31,8 +32,8 @@ def _named_types_map(bv: Any) -> Dict[str, Any]:
         try:
             for qname, t in dict(get_types()).items():
                 out[str(qname)] = t
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_named_types_map get_types failed: {e}")
     return out
 
 
@@ -43,8 +44,8 @@ def _get_type_by_name(bv: Any, name: str) -> Any:
             t = get_type(name)
             if t is not None:
                 return t
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_get_type_by_name get_type_by_name failed for {name!r}: {e}")
     return _named_types_map(bv).get(name)
 
 
@@ -83,8 +84,8 @@ def _type_to_str(t: Any) -> str:
             s = get_string()
             if s:
                 return str(s)
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_type_to_str get_string_before_name failed: {e}")
     return str(t)
 
 
@@ -111,7 +112,8 @@ def _parse_types_from_source(bv: Any, source: str) -> Dict[str, Any]:
             continue
         try:
             res = meth(source)
-        except Exception:
+        except Exception as e:
+            log_debug(f"_parse_types_from_source {meth_name} failed: {e}")
             continue
 
         if isinstance(res, tuple) and res:
@@ -553,8 +555,8 @@ def apply_struct_to_address(
             try:
                 meth(ea, t)
                 return f"Applied struct '{struct_name}' at 0x{ea:x}"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"apply_struct_to_address {meth_name} failed at 0x{ea:x}: {e}")
     return f"Failed to apply struct at 0x{ea:x}"
 
 
@@ -597,8 +599,8 @@ def apply_type_to_variable(
             try:
                 meth(target, tif)
                 return f"Set type of '{var_name}' to '{type_str}'"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"apply_type_to_variable {meth_name} failed for {var_name!r}: {e}")
 
     for meth_name in ("create_user_var", "createUserVar"):
         meth = getattr(func, meth_name, None)
@@ -606,8 +608,8 @@ def apply_type_to_variable(
             try:
                 meth(target, tif, var_name)
                 return f"Set type of '{var_name}' to '{type_str}'"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"apply_type_to_variable {meth_name} failed for {var_name!r}: {e}")
 
     return f"Failed to set type on '{var_name}'"
 
@@ -635,12 +637,13 @@ def set_function_prototype(
             try:
                 meth(t)
                 return f"Set prototype at 0x{int(getattr(func, 'start', ea)):x}: {prototype}"
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"set_function_prototype {meth_name} failed at 0x{ea:x}: {e}")
     try:
         setattr(func, "type", t)
         return f"Set prototype at 0x{int(getattr(func, 'start', ea)):x}: {prototype}"
-    except Exception:
+    except Exception as e:
+        log_debug(f"set_function_prototype setattr failed at 0x{ea:x}: {e}")
         return f"Failed to set prototype. Check syntax: {prototype}"
 
 
@@ -775,7 +778,8 @@ def import_type_from_library(
             if callable(meth):
                 try:
                     t = meth(type_name)
-                except Exception:
+                except Exception as e:
+                    log_debug(f"import_type_from_library {meth_name} failed for {type_name!r}: {e}")
                     t = None
                 if t is not None and define_user_type(bv, type_name, t):
                     return f"Imported '{type_name}' from '{til_name}'"
@@ -783,7 +787,8 @@ def import_type_from_library(
     # Fallback: attempt parser include from library name in a typedef import line.
     try:
         parsed = _define_types_from_source(bv, f"typedef {type_name} {type_name};")
-    except Exception:
+    except Exception as e:
+        log_debug(f"import_type_from_library fallback parse failed for {type_name!r}: {e}")
         parsed = {}
     if type_name in parsed:
         return f"Imported '{type_name}' from '{til_name}'"

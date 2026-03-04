@@ -7,6 +7,7 @@ from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
 from ...core.errors import ToolError
 from ...core.host import get_binary_ninja_view, get_current_address, navigate_to, set_current_address
+from ...core.logging import log_debug
 
 
 def get_bn_module() -> Any:
@@ -50,9 +51,11 @@ def call_compat(obj: Any, *method_names: str, default: Any = None, **kwargs: Any
             if kwargs:
                 try:
                     return meth(*kwargs.values())
-                except Exception:
+                except Exception as _e:
+                    log_debug(f"call_compat positional fallback failed for {name}: {_e}")
                     continue
-        except Exception:
+        except Exception as _e:
+            log_debug(f"call_compat failed for {name}: {_e}")
             continue
     return default
 
@@ -72,8 +75,8 @@ def get_function_at(bv: Any, ea: int) -> Any:
             funcs = list(get_containing(ea))
             if funcs:
                 return funcs[0]
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"get_functions_containing failed at 0x{ea:x}: {e}")
     return None
 
 
@@ -100,8 +103,8 @@ def get_function_end(func: Any) -> int:
         addrs = list(iter_function_instruction_addresses(func))
         if addrs:
             return max(addrs) + 1
-    except Exception:
-        pass
+    except Exception as e:
+        log_debug(f"iter_function_instruction_addresses failed: {e}")
     return int(getattr(func, "start", 0))
 
 
@@ -109,8 +112,8 @@ def iter_functions(bv: Any) -> List[Any]:
     funcs = list(getattr(bv, "functions", []) or [])
     try:
         funcs.sort(key=lambda f: int(getattr(f, "start", 0)))
-    except Exception:
-        pass
+    except Exception as e:
+        log_debug(f"Function sort failed: {e}")
     return funcs
 
 
@@ -123,8 +126,9 @@ def get_instruction_len(bv: Any, ea: int) -> int:
                 l = int(meth(ea))
                 if l > 0:
                     return l
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"get_instruction_len {name} failed at 0x{ea:x}: {e}")
+                continue
 
     text = get_disassembly_line(bv, ea)
     if text:
@@ -141,8 +145,8 @@ def get_instruction_text_tokens(bv: Any, ea: int) -> Tuple[List[Any], int]:
             if isinstance(res, tuple) and len(res) == 2:
                 toks, l = res
                 return list(toks or []), int(l or 0)
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"get_instruction_text failed at 0x{ea:x}: {e}")
     return [], 0
 
 
@@ -165,8 +169,9 @@ def get_disassembly_line(bv: Any, ea: int) -> str:
                 text = meth(ea)
                 if text:
                     return str(text)
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"get_disassembly_line {name} failed at 0x{ea:x}: {e}")
+                continue
     toks, _ = get_instruction_text_tokens(bv, ea)
     return render_tokens(toks)
 
@@ -199,8 +204,9 @@ def get_symbol_at(bv: Any, ea: int) -> Any:
                 sym = meth(ea)
                 if sym is not None:
                     return sym
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"get_symbol_at {name} failed at 0x{ea:x}: {e}")
+                continue
     return None
 
 
@@ -234,7 +240,8 @@ def iter_symbols(bv: Any) -> List[Any]:
     if callable(get_symbols):
         try:
             symbols = list(get_symbols())
-        except Exception:
+        except Exception as e:
+            log_debug(f"get_symbols() failed: {e}")
             symbols = []
 
     if not symbols:
@@ -248,7 +255,8 @@ def iter_symbols(bv: Any) -> List[Any]:
         elif raw is not None:
             try:
                 symbols = list(raw)
-            except Exception:
+            except Exception as e:
+                log_debug(f"iter bv.symbols failed: {e}")
                 symbols = []
 
     return symbols
@@ -259,8 +267,8 @@ def iter_symbols_by_name(bv: Any, name: str) -> List[Any]:
     if callable(get_by_name):
         try:
             return list(get_by_name(name))
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"get_symbols_by_name({name!r}) failed: {e}")
     return [s for s in iter_symbols(bv) if symbol_name(s) == name]
 
 
@@ -302,7 +310,8 @@ def _build_user_symbol(bn: Any, sym_type: Any, ea: int, new_name: str) -> Any:
         # Some versions accept optional short/full names.
         try:
             return symbol_cls(sym_type, int(ea), new_name, new_name)
-        except Exception:
+        except Exception as e:
+            log_debug(f"Symbol constructor failed at 0x{ea:x}: {e}")
             return None
 
 
@@ -327,8 +336,9 @@ def rename_symbol_at(bv: Any, ea: int, new_name: str) -> bool:
             try:
                 meth(new_sym)
                 return True
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"rename_symbol_at {name} failed at 0x{ea:x}: {e}")
+                continue
     return False
 
 
@@ -341,8 +351,9 @@ def get_comment_at(bv: Any, ea: int) -> str:
                 c = meth(ea)
                 if c:
                     return str(c)
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"get_comment_at {name} failed at 0x{ea:x}: {e}")
+                continue
     return ""
 
 
@@ -354,8 +365,9 @@ def set_comment_at(bv: Any, ea: int, comment: str) -> bool:
             try:
                 meth(ea, comment)
                 return True
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"set_comment_at {name} failed at 0x{ea:x}: {e}")
+                continue
     return False
 
 
@@ -372,8 +384,8 @@ def parse_type_string(bv: Any, type_src: str) -> tuple[Any, str]:
             n = getattr(res, "name", "")
             if t is not None:
                 return t, str(n or "")
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"bv.parse_type_string failed for {type_src!r}: {e}")
 
     bn = get_bn_module()
     parse_global = getattr(bn, "parse_type_string", None)
@@ -382,8 +394,8 @@ def parse_type_string(bv: Any, type_src: str) -> tuple[Any, str]:
             res = parse_global(type_src, getattr(bv, "platform", None))
             if isinstance(res, tuple) and len(res) >= 2:
                 return res[0], str(res[1] or "")
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"bn.parse_type_string failed for {type_src!r}: {e}")
 
     raise ToolError(f"Failed to parse type string: {type_src}")
 
@@ -395,8 +407,9 @@ def define_user_type(bv: Any, name: str, t: Any) -> bool:
             try:
                 meth(name, t)
                 return True
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"define_user_type {meth_name}({name!r}) failed: {e}")
+                continue
     return False
 
 
@@ -407,8 +420,9 @@ def update_analysis_and_wait(bv: Any) -> None:
             try:
                 meth()
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"update_analysis_and_wait {name} failed: {e}")
+                continue
 
 
 def navigate(ea: int) -> bool:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 
 from ..core.errors import ToolError
+from ..core.logging import log_debug
 
 _HAS_HEXRAYS = False
 try:
@@ -16,8 +17,8 @@ try:
     ida_lines = importlib.import_module("ida_lines")
     ida_name = importlib.import_module("ida_name")
     _HAS_HEXRAYS = True
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 # ---------------------------------------------------------------------------
 # Maturity level helpers
@@ -82,8 +83,8 @@ def format_block(blk, include_insns: bool = True) -> str:
     blk_type = ""
     try:
         blk_type = f" type={blk.type}"
-    except AttributeError:
-        pass  # .type not available at all maturities
+    except AttributeError as e:
+        log_debug(f"format_block blk.type unavailable: {e}")
 
     hdr = (
         f"--- Block {blk.serial} "
@@ -157,8 +158,8 @@ def func_name(pfn) -> str:
         name = ida_name.get_name(pfn.start_ea)
         if name:
             return f"{name} ({pfn.start_ea:#x})"
-    except (NameError, AttributeError):
-        pass  # ida_name unavailable or API changed
+    except (NameError, AttributeError) as e:
+        log_debug(f"func_name_str: ida_name unavailable: {e}")
     return f"sub_{pfn.start_ea:x}"
 
 
@@ -189,8 +190,8 @@ if _HAS_HEXRAYS:
         parts = [f"nested_insn size={op.size}"]
         try:
             parts.append(f"  => {insn_text(op.d)}")
-        except (AttributeError, RuntimeError):
-            pass
+        except (AttributeError, RuntimeError) as e:
+            log_debug(f"_fmt_d nested insn_text failed: {e}")
         return " ".join(parts)
 
     _MOP_FORMATTERS = {

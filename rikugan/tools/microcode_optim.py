@@ -17,8 +17,8 @@ _HAS_HEXRAYS = False
 try:
     ida_hexrays = importlib.import_module("ida_hexrays")
     _HAS_HEXRAYS = True
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 # ---------------------------------------------------------------------------
 # Global optimizer registry — keeps references alive so IDA doesn't GC them

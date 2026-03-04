@@ -109,6 +109,7 @@ class RikuganPanelCore(QWidget):
         self._tab_id_for_index: Dict[int, str] = {}
         self._context_bar: Optional[ContextBar] = None
         self._mutation_panel: Optional[MutationLogPanel] = None
+        self._skills_refresh_timer: Optional[QTimer] = None
 
         def _warm_oauth() -> None:
             try:
@@ -118,6 +119,39 @@ class RikuganPanelCore(QWidget):
 
         threading.Thread(target=_warm_oauth, daemon=True).start()
         self._build_ui()
+
+    def _ensure_skills_refresh_timer(self) -> None:
+        """Refresh skill autocomplete once background discovery completes."""
+        if self._skills_refresh_timer is not None:
+            return
+        self._skills_refresh_timer = QTimer(self)
+        self._skills_refresh_timer.setInterval(300)
+        self._skills_refresh_timer.timeout.connect(self._refresh_skill_slugs)
+        self._skills_refresh_timer.start()
+
+    def _stop_skills_refresh_timer(self) -> None:
+        if self._skills_refresh_timer is None:
+            return
+        self._skills_refresh_timer.stop()
+        try:
+            self._skills_refresh_timer.timeout.disconnect(self._refresh_skill_slugs)
+        except (RuntimeError, TypeError) as e:
+            log_debug(f"skills refresh timer disconnect failed: {e}")
+        self._skills_refresh_timer.deleteLater()
+        self._skills_refresh_timer = None
+
+    def _refresh_skill_slugs(self) -> None:
+        if self._is_shutdown:
+            self._stop_skills_refresh_timer()
+            return
+        slugs = self._ctrl.skill_slugs
+        if slugs:
+            self._input_area.set_skill_slugs(slugs)
+            self._stop_skills_refresh_timer()
+            return
+        if getattr(self._ctrl, "runtime_ready", False):
+            # Runtime init completed but no skills found; stop polling.
+            self._stop_skills_refresh_timer()
 
     def _build_ui(self) -> None:
         self.setStyleSheet(DARK_THEME)
@@ -185,6 +219,7 @@ class RikuganPanelCore(QWidget):
         self._input_area.set_submit_callback(self._on_submit)
         self._input_area.set_cancel_callback(self._on_cancel)
         self._input_area.set_skill_slugs(self._ctrl.skill_slugs)
+        self._ensure_skills_refresh_timer()
         input_layout.addWidget(self._input_area, 1)
 
         btn_layout = QVBoxLayout()
@@ -521,6 +556,7 @@ class RikuganPanelCore(QWidget):
         self._is_shutdown = True
         try:
             self._stop_poll_timer()
+            self._stop_skills_refresh_timer()
             if self._context_bar:
                 self._context_bar.stop()
             for cv in self._chat_views.values():
@@ -534,9 +570,10 @@ class RikuganPanelCore(QWidget):
 
     def on_database_changed(self, new_path: str) -> None:
         """Called when the user opens a different file."""
-        if new_path == self._ctrl._idb_path:
+        normalized = os.path.normcase(os.path.realpath(os.path.abspath(new_path))) if new_path else ""
+        if normalized == self._ctrl._idb_path:
             return
-        self._ctrl.reset_for_new_file(new_path)
+        self._ctrl.reset_for_new_file(normalized)
         # Remove all existing tabs
         for cv in self._chat_views.values():
             cv.shutdown()
@@ -564,7 +601,8 @@ class RikuganPanelCore(QWidget):
             if runner:
                 runner.agent_loop.submit_user_answer(text)
             return
-        if self._ctrl.is_agent_running:
+        # Queue while a runner exists, even during startup before is_running flips true.
+        if self._ctrl.get_runner() is not None:
             self._ctrl.queue_message(text)
             chat_view.add_queued_message(text)
             return
@@ -656,8 +694,8 @@ class RikuganPanelCore(QWidget):
             self._poll_timer.stop()
             try:
                 self._poll_timer.timeout.disconnect(self._poll_events)
-            except (RuntimeError, TypeError):
-                pass
+            except (RuntimeError, TypeError) as e:
+                log_debug(f"panel_core timer disconnect failed: {e}")
             self._poll_timer.deleteLater()
             self._poll_timer = None
 
@@ -794,7 +832,18 @@ class RikuganPanelCore(QWidget):
         self._start_agent(f"/undo {count}")
 
     def _set_running(self, running: bool) -> None:
-        self._input_area.set_enabled(not running)
-        self._send_btn.setVisible(not running)
-        self._send_btn.setEnabled(not running)
+        # Keep input enabled so users can queue follow-up messages while running.
+        self._input_area.set_enabled(True)
+        if running:
+            self._input_area.setPlaceholderText(
+                "Rikugan is thinking... press Enter (or Queue) to queue a follow-up."
+            )
+        else:
+            self._input_area.setPlaceholderText(
+                "Ask about this binary... (/ for skills, /modify to patch)"
+            )
+
+        self._send_btn.setVisible(True)
+        self._send_btn.setEnabled(True)
+        self._send_btn.setText("Queue" if running else "Send")
         self._cancel_btn.setVisible(running)

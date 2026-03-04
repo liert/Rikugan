@@ -25,8 +25,8 @@ def _collect_callers(func) -> list[str]:
         try:
             for c in direct:
                 callers.add(get_function_name(c))
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_collect_callers failed: {e}")
     return sorted(callers)
 
 
@@ -37,8 +37,8 @@ def _collect_callees(func) -> list[str]:
         try:
             for c in direct:
                 callees.add(get_function_name(c))
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_collect_callees failed: {e}")
     return sorted(callees)
 
 

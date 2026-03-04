@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from typing import Annotated
 
+from ..core.logging import log_debug
 from .base import parse_addr, tool
 
 
@@ -15,8 +16,8 @@ try:
     idaapi = importlib.import_module("idaapi")
     idautils = importlib.import_module("idautils")
     idc = importlib.import_module("idc")
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 
 
@@ -113,8 +114,8 @@ def get_binary_info() -> str:
 
     try:
         lines.append(f"File type: {idaapi.get_file_type_name()}")
-    except AttributeError:
-        pass  # get_file_type_name not available in this IDA version
+    except AttributeError as e:
+        log_debug(f"get_binary_info: get_file_type_name unavailable: {e}")
 
     func_count = sum(1 for _ in idautils.Functions())
     lines.append(f"Functions: {func_count}")

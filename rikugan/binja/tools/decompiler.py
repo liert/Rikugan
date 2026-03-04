@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import get_function_at, parse_addr_like, require_bv
 
@@ -14,7 +15,8 @@ def _get_hlil(func):
             hlil = getattr(func, attr)
             if hlil is not None:
                 return hlil
-        except Exception:
+        except Exception as e:
+            log_debug(f"_get_hlil {attr} failed: {e}")
             continue
     return None
 

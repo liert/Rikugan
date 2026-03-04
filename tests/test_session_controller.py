@@ -13,7 +13,7 @@ install_ida_mocks()
 
 from rikugan.core.config import RikuganConfig
 from rikugan.core.types import Message, Role, TokenUsage, ToolCall, ToolResult
-from rikugan.ui.session_controller import SessionController
+from rikugan.ida.ui.session_controller import SessionController
 
 
 class TestSessionController(unittest.TestCase):

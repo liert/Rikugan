@@ -35,8 +35,8 @@ try:
     ida_funcs = importlib.import_module("ida_funcs")
     ida_range = importlib.import_module("ida_range")
     _HAS_HEXRAYS = True
-except ImportError:
-    pass
+except ImportError as e:
+    log_debug(f"IDA modules not available: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -91,16 +91,16 @@ def _gen_microcode_at(ea: int, maturity: int):
                 cur = cfunc.mba.maturity
                 if captured[0] is None and cur == maturity:
                     captured[0] = format_mba(cfunc.mba)
-            except (AttributeError, RuntimeError):
-                pass  # mba not yet available at this callback stage
+            except (AttributeError, RuntimeError) as e:
+                log_debug(f"_capture_at_maturity hook: mba not yet available: {e}")
             return 0
 
     hook = _Capture()
     hook.hook()
     try:
         ida_hexrays.decompile(pfn.start_ea)
-    except (ida_hexrays.DecompilationFailure, RuntimeError):
-        pass  # decompile failure is OK here; we only need the hook capture
+    except (ida_hexrays.DecompilationFailure, RuntimeError) as e:
+        log_debug(f"_capture_at_maturity decompile failed (expected for hook capture): {e}")
     finally:
         hook.unhook()
 
@@ -195,8 +195,8 @@ def get_microcode_block(
     lines.append(f"Successors:   {succs}")
     try:
         lines.append(f"Block type:   {blk.type}")
-    except AttributeError:
-        pass  # .type not available at all maturities
+    except AttributeError as e:
+        log_debug(f"get_microcode_block blk.type unavailable: {e}")
     lines.append("")
 
     # Instructions with detailed operand dump
@@ -433,8 +433,8 @@ def redecompile_function(
     # Clear cached decompilation to force re-analysis
     try:
         ida_hexrays.mark_cfunc_dirty(pfn.start_ea)
-    except (AttributeError, RuntimeError):
-        pass  # mark_cfunc_dirty may not be available in older IDA
+    except (AttributeError, RuntimeError) as e:
+        log_debug(f"redecompile mark_cfunc_dirty unavailable: {e}")
 
     try:
         cfunc = ida_hexrays.decompile(pfn.start_ea)

@@ -60,8 +60,8 @@ class ToolRegistry:
                         coerced[key] = str(value).lower() in ("true", "1", "yes")
                 elif expected == "string" and not isinstance(value, str):
                     coerced[key] = str(value)
-            except (ValueError, TypeError):
-                pass  # Let the handler raise a proper validation error
+            except (ValueError, TypeError) as e:
+                log_debug(f"_coerce_arguments: coercion failed for {key!r}: {e}")  # handler will raise validation error
 
         return coerced
 

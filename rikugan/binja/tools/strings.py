@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Iterable, Tuple
 
+from ...core.logging import log_debug
 from ...tools.base import tool
 from .common import parse_addr_like, require_bv
 
@@ -80,8 +81,8 @@ def get_string_at(address: Annotated[str, "Address (hex string)"]) -> str:
                 value = getattr(s, "value", None) or getattr(s, "string", None)
                 if value is not None:
                     return str(value)
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"get_string_at failed at 0x{ea:x}: {e}")
 
     for start, _length, text in _iter_strings(bv):
         if start == ea:

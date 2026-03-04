@@ -12,15 +12,15 @@ from .qt_compat import (
 from .message_widgets import (
     AssistantMessageWidget, ErrorMessageWidget, ExplorationFindingWidget,
     ExplorationPhaseWidget, QueuedMessageWidget,
-    ThinkingWidget, ToolApprovalWidget, ToolBatchWidget, ToolCallWidget,
+    ThinkingWidget, ToolApprovalWidget, ToolCallWidget,
     ToolGroupWidget, UserMessageWidget, UserQuestionWidget,
 )
 from ..agent.turn import TurnEvent, TurnEventType
 from ..core.types import Message, Role
 from .plan_view import PlanView
 
-# Max tool previews shown per turn before hiding further previews.
-_MAX_TOOL_PREVIEWS = 3
+# Collapse consecutive tool runs once they reach this many calls.
+_TOOL_GROUP_MIN_CALLS = 1
 
 
 class ChatView(QScrollArea):
@@ -49,16 +49,13 @@ class ChatView(QScrollArea):
         self._thinking_shown_at: float = 0.0
         self._plan_view: Optional[PlanView] = None
 
-        # --- Tool batching state ---
-        self._current_batch: Optional[ToolBatchWidget] = None
-        self._current_batch_name: str = ""
-        # Map tool_call_id -> batch widget it belongs to
-        self._batch_map: Dict[str, ToolBatchWidget] = {}
-        # Preview budget: how many tool previews left in this turn
-        self._preview_budget: int = _MAX_TOOL_PREVIEWS
-        # Collapsible group for overflow tool calls
+        # Consecutive tool run state (collapsed when threshold is reached)
+        self._tool_run_ids: List[str] = []
+        self._tool_run_names: List[str] = []
+        self._tool_run_widgets: List[ToolCallWidget] = []
+        # Active collapsible group for the current run
         self._tool_group: Optional[ToolGroupWidget] = None
-        # Map tool_call_id -> group it belongs to (for result routing)
+        # Map tool_call_id -> group it belongs to (for result routing/status)
         self._group_map: Dict[str, ToolGroupWidget] = {}
 
         # Member timer for scroll-to-bottom
@@ -130,16 +127,47 @@ class ChatView(QScrollArea):
         self._thinking.deleteLater()
         self._thinking = None
 
-    # --- Tool batching ---
-
-    def _flush_batch(self) -> None:
-        """End current batch. Called when a non-matching event arrives."""
-        self._current_batch = None
-        self._current_batch_name = ""
-
-    def _flush_tool_group(self) -> None:
-        """End the current tool group (called on turn end or non-tool event)."""
+    def _reset_tool_run(self) -> None:
+        """End the current consecutive tool run (state only)."""
         self._tool_group = None
+        self._tool_run_ids.clear()
+        self._tool_run_names.clear()
+        self._tool_run_widgets.clear()
+
+    def _register_tool_widget(
+        self, tool_name: str, tool_id: str, widget: ToolCallWidget
+    ) -> None:
+        """Attach a new tool widget to the current run, collapsing at threshold."""
+        self._tool_run_ids.append(tool_id)
+        self._tool_run_names.append(tool_name)
+        self._tool_run_widgets.append(widget)
+
+        run_len = len(self._tool_run_widgets)
+
+        # Below threshold: show tool calls directly.
+        if self._tool_group is None and run_len < _TOOL_GROUP_MIN_CALLS:
+            self._insert_widget(widget)
+            return
+
+        # Threshold reached: move entire run into a new collapsible group.
+        if self._tool_group is None and run_len == _TOOL_GROUP_MIN_CALLS:
+            self._tool_group = ToolGroupWidget()
+            self._insert_widget(self._tool_group)
+
+            for idx, run_widget in enumerate(self._tool_run_widgets):
+                self._layout.removeWidget(run_widget)
+                run_widget.hide_preview()
+
+                run_tool_id = self._tool_run_ids[idx]
+                run_tool_name = self._tool_run_names[idx]
+                self._tool_group.add_widget(run_widget, run_tool_name)
+                self._group_map[run_tool_id] = self._tool_group
+            return
+
+        # Already collapsed: add new call directly to existing group.
+        widget.hide_preview()
+        self._tool_group.add_widget(widget, tool_name)
+        self._group_map[tool_id] = self._tool_group
 
     def handle_event(self, event: TurnEvent) -> None:
         """Process a TurnEvent and update the UI accordingly."""
@@ -147,8 +175,7 @@ class ChatView(QScrollArea):
 
         if etype == TurnEventType.TEXT_DELTA:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             if self._current_assistant is None:
                 self._current_assistant = AssistantMessageWidget()
                 self._insert_widget(self._current_assistant)
@@ -157,8 +184,7 @@ class ChatView(QScrollArea):
 
         elif etype == TurnEventType.TEXT_DONE:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             if self._current_assistant is not None:
                 self._current_assistant.set_text(event.text)
             self._current_assistant = None
@@ -168,64 +194,28 @@ class ChatView(QScrollArea):
             tool_name = event.tool_name
             tool_id = event.tool_call_id
 
-            if tool_name == self._current_batch_name and self._current_batch is not None:
-                # Same tool as current batch — merge into it
-                self._current_batch.add_call(tool_id)
-                self._batch_map[tool_id] = self._current_batch
-            else:
-                # Different tool or no batch — flush and start new
-                self._flush_batch()
-
-                tw = ToolCallWidget(tool_name, tool_id)
-                self._tool_widgets[tool_id] = tw
-                self._current_batch_name = tool_name
-
-                if self._preview_budget > 0:
-                    # Within budget — show directly in chat
-                    self._preview_budget -= 1
-                    self._insert_widget(tw)
-                else:
-                    # Over budget — add to collapsible group
-                    tw.hide_preview()
-                    if self._tool_group is None:
-                        self._tool_group = ToolGroupWidget()
-                        self._insert_widget(self._tool_group)
-                    self._tool_group.add_widget(tw)
-                    self._group_map[tool_id] = self._tool_group
+            tw = ToolCallWidget(tool_name, tool_id)
+            self._tool_widgets[tool_id] = tw
+            self._register_tool_widget(tool_name, tool_id, tw)
 
             self._scroll_to_bottom()
 
         elif etype == TurnEventType.TOOL_CALL_ARGS_DELTA:
-            batch = self._batch_map.get(event.tool_call_id)
-            if batch:
-                pass  # Batched calls don't stream args
-            else:
-                tw = self._tool_widgets.get(event.tool_call_id)
-                if tw:
-                    tw.append_args_delta(event.tool_args)
+            tw = self._tool_widgets.get(event.tool_call_id)
+            if tw:
+                tw.append_args_delta(event.tool_args)
 
         elif etype == TurnEventType.TOOL_CALL_DONE:
-            batch = self._batch_map.get(event.tool_call_id)
-            if batch:
-                batch.set_args_for_call(event.tool_call_id, event.tool_args)
-            else:
-                tw = self._tool_widgets.get(event.tool_call_id)
-                if tw:
-                    tw.set_arguments(event.tool_args)
-
-                    # Check if we should upgrade this to a batch for next call
-                    # (handled implicitly by _current_batch_name tracking)
+            tw = self._tool_widgets.get(event.tool_call_id)
+            if tw:
+                tw.set_arguments(event.tool_args)
 
         elif etype == TurnEventType.TOOL_RESULT:
-            batch = self._batch_map.get(event.tool_call_id)
-            if batch:
-                batch.set_result_for_call(
-                    event.tool_call_id, event.tool_result, event.tool_is_error
-                )
-            else:
-                tw = self._tool_widgets.get(event.tool_call_id)
-                if tw:
-                    tw.set_result(event.tool_result, event.tool_is_error)
+            # A result marks the end of a consecutive tool-call run.
+            self._reset_tool_run()
+            tw = self._tool_widgets.get(event.tool_call_id)
+            if tw:
+                tw.set_result(event.tool_result, event.tool_is_error)
             # Notify group if this tool belongs to one
             group = self._group_map.get(event.tool_call_id)
             if group:
@@ -234,38 +224,32 @@ class ChatView(QScrollArea):
 
         elif etype == TurnEventType.TURN_START:
             self._current_assistant = None
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             self._group_map.clear()
-            self._preview_budget = _MAX_TOOL_PREVIEWS  # Reset budget per turn
             self._show_thinking()
             self._scroll_to_bottom()
 
         elif etype == TurnEventType.TURN_END:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             self._current_assistant = None
 
         elif etype == TurnEventType.ERROR:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             self._insert_widget(ErrorMessageWidget(event.error or "Unknown error"))
             self._scroll_to_bottom()
 
         elif etype == TurnEventType.USER_QUESTION:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             options = event.metadata.get("options", [])
             self._insert_widget(UserQuestionWidget(event.text, options))
             self._scroll_to_bottom()
 
         elif etype == TurnEventType.PLAN_GENERATED:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             self._plan_view = PlanView()
             if event.plan_steps:
                 self._plan_view.set_plan(event.plan_steps)
@@ -285,8 +269,7 @@ class ChatView(QScrollArea):
 
         elif etype == TurnEventType.TOOL_APPROVAL_REQUEST:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             widget = ToolApprovalWidget(
                 event.tool_call_id, event.tool_name,
                 event.tool_args, event.text,
@@ -297,8 +280,7 @@ class ChatView(QScrollArea):
 
         elif etype == TurnEventType.EXPLORATION_PHASE_CHANGE:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             meta = event.metadata
             self._insert_widget(ExplorationPhaseWidget(
                 meta.get("from_phase", ""),
@@ -319,8 +301,7 @@ class ChatView(QScrollArea):
 
         elif etype == TurnEventType.SAVE_APPROVAL_REQUEST:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             # Rendered as a user question with save options
             options = ["Save All", "Discard All"]
             self._insert_widget(UserQuestionWidget(event.text, options))
@@ -328,8 +309,7 @@ class ChatView(QScrollArea):
 
         elif etype == TurnEventType.CANCELLED:
             self._hide_thinking()
-            self._flush_batch()
-            self._flush_tool_group()
+            self._reset_tool_run()
             self._insert_widget(ErrorMessageWidget("Cancelled by user"))
             self._scroll_to_bottom()
 
@@ -341,66 +321,41 @@ class ChatView(QScrollArea):
         """Replay saved Message objects into the chat view."""
         self.clear_chat()
 
-        # For batching during restore
-        current_batch_name = ""
-        current_batch: Optional[ToolBatchWidget] = None
-        tool_widgets_restore: Dict[str, ToolCallWidget] = {}
-        batch_map_restore: Dict[str, ToolBatchWidget] = {}
-
         for msg in messages:
             if msg.role == Role.USER:
-                current_batch_name = ""
-                current_batch = None
+                self._reset_tool_run()
                 self.add_user_message(msg.content)
 
             elif msg.role == Role.ASSISTANT:
-                current_batch_name = ""
-                current_batch = None
+                self._reset_tool_run()
                 if msg.content:
                     w = AssistantMessageWidget()
                     w.set_text(msg.content)
                     self._insert_widget(w)
 
-                # Group consecutive same-name tool calls
                 for tc in msg.tool_calls:
-                    if tc.name == current_batch_name and current_batch is not None:
-                        # Add to existing batch
-                        try:
-                            args_str = json.dumps(tc.arguments, indent=2)
-                        except Exception:
-                            args_str = str(tc.arguments)
-                        current_batch.add_call(tc.id, args_str)
-                        batch_map_restore[tc.id] = current_batch
-                    elif tc.name == current_batch_name and current_batch is None:
-                        # Second call of same name — upgrade previous to batch
-                        pass  # Handled by batch creation below
-                    else:
-                        # New tool name
-                        current_batch_name = tc.name
-                        current_batch = None
-
-                        tw = ToolCallWidget(tc.name, tc.id)
-                        try:
-                            args_str = json.dumps(tc.arguments, indent=2)
-                        except Exception:
-                            args_str = str(tc.arguments)
-                        tw.set_arguments(args_str)
-                        tw.mark_done()
-                        tool_widgets_restore[tc.id] = tw
-                        self._tool_widgets[tc.id] = tw
-                        self._insert_widget(tw)
+                    tw = ToolCallWidget(tc.name, tc.id)
+                    try:
+                        args_str = json.dumps(tc.arguments, indent=2)
+                    except Exception:
+                        args_str = str(tc.arguments)
+                    tw.set_arguments(args_str)
+                    tw.mark_done()
+                    self._tool_widgets[tc.id] = tw
+                    self._register_tool_widget(tc.name, tc.id, tw)
 
             elif msg.role == Role.TOOL:
+                self._reset_tool_run()
                 for tr in msg.tool_results:
-                    batch = batch_map_restore.get(tr.tool_call_id)
-                    if batch:
-                        batch.set_result_for_call(tr.tool_call_id, tr.content, tr.is_error)
-                    else:
-                        tw = self._tool_widgets.get(tr.tool_call_id)
-                        if tw:
-                            tw.set_result(tr.content, tr.is_error)
+                    tw = self._tool_widgets.get(tr.tool_call_id)
+                    if tw:
+                        tw.set_result(tr.content, tr.is_error)
+                    group = self._group_map.get(tr.tool_call_id)
+                    if group:
+                        group.notify_result(tr.is_error)
 
         self._current_assistant = None
+        self._reset_tool_run()
         self._scroll_to_bottom()
 
     def clear_chat(self) -> None:
@@ -414,11 +369,8 @@ class ChatView(QScrollArea):
         self._current_assistant = None
         self._tool_widgets.clear()
         self._plan_view = None
-        self._flush_batch()
-        self._batch_map.clear()
-        self._flush_tool_group()
+        self._reset_tool_run()
         self._group_map.clear()
-        self._preview_budget = _MAX_TOOL_PREVIEWS
 
     def _insert_widget(self, widget: QWidget) -> None:
         """Insert before the stretch at the end."""

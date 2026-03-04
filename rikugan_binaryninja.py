@@ -13,7 +13,8 @@ except Exception:  # pragma: no cover - loaded only in Binary Ninja runtime
 if bn is not None:
     # Binary Ninja loads this file as part of the plugin package.
     # Use relative imports to reach the framework package at ./rikugan/.
-    from .rikugan.core.host import set_binary_ninja_context
+    from .rikugan.core.host import get_database_path, set_binary_ninja_context
+    from .rikugan.core.logging import log_debug
     from .rikugan.binja.ui.actions import ACTION_DEFS, build_context
     from .rikugan.binja.ui.panel import RikuganPanel
     from .rikugan.binja.tools.common import get_function_at, get_function_name
@@ -24,6 +25,8 @@ if bn is not None:
         bnui = None
 else:  # pragma: no cover - imported outside Binary Ninja
     set_binary_ninja_context = None  # type: ignore[assignment]
+    get_database_path = lambda: ""  # noqa: E731 — no-op stub outside BN
+    log_debug = lambda *a, **k: None  # noqa: E731 — no-op stub outside BN
     RikuganPanel = Any  # type: ignore[misc,assignment]
     ACTION_DEFS = ()
     bnui = None
@@ -59,13 +62,14 @@ def _navigate_cb(ea: int) -> bool:
             try:
                 if bool(nav(view, int(ea))):
                     return True
-            except Exception:
+            except Exception as e:
+                log_debug(f"_navigate_cb nav({view!r}) failed at 0x{ea:x}: {e}")
                 continue
         try:
             if bool(nav(int(ea))):
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            log_debug(f"_navigate_cb nav(ea) failed at 0x{ea:x}: {e}")
 
     # Try UIContext navigation APIs if available
     if bnui is not None:
@@ -83,26 +87,28 @@ def _navigate_cb(ea: int) -> bool:
                                     rc = meth(int(ea))
                                     if rc is None or bool(rc):
                                         return True
-                                except Exception:
-                                    pass
-        except Exception:
-            pass
+                                except Exception as e:
+                                    log_debug(f"_navigate_cb UIContext.{meth_name} failed at 0x{ea:x}: {e}")
+        except Exception as e:
+            log_debug(f"_navigate_cb UIContext navigation failed at 0x{ea:x}: {e}")
 
     return False
 
 
 def _update_context(bv: Any, address: Optional[int] = None) -> None:
     global _LAST_BV
-    if bv is not _LAST_BV and _LAST_BV is not None:
-        # BinaryView changed — notify panel
-        panel = _get_sidebar_panel(create_if_missing=False)
-        if panel is not None:
-            new_path = bv.file.filename if bv and bv.file else ""
-            if hasattr(panel, "on_database_changed"):
-                panel.on_database_changed(new_path)
+    changed_view = (bv is not _LAST_BV) and (_LAST_BV is not None)
     _LAST_BV = bv
     if set_binary_ninja_context is not None:
         set_binary_ninja_context(bv=bv, address=address, navigate_cb=_navigate_cb)
+    if changed_view:
+        # BinaryView changed — notify panel with normalized path from host context.
+        panel = _get_sidebar_panel(create_if_missing=False)
+        if panel is not None and hasattr(panel, "on_database_changed"):
+            try:
+                panel.on_database_changed(get_database_path())
+            except Exception as e:
+                log_debug(f"_update_context on_database_changed failed: {e}")
 
 
 def _active_sidebar() -> Any:
@@ -158,8 +164,8 @@ def _ensure_panel(bv: Any, address: Optional[int] = None) -> RikuganPanel:
     try:
         _PANEL.raise_()
         _PANEL.activateWindow()
-    except Exception:
-        pass
+    except Exception as e:
+        log_debug(f"_ensure_panel raise_/activateWindow failed: {e}")
     return _PANEL
 
 
@@ -198,9 +204,10 @@ def _register_sidebar() -> None:
             super().__init__(RIKUGAN_SIDEBAR_NAME)
             self.view_frame = view_frame
             self.binary_view = binary_view
+            # Ensure host DB context exists before panel/controller construction.
+            _update_context(binary_view, None)
             self.panel = RikuganPanel()
             self.panel.mount(self)
-            _update_context(binary_view, None)
 
         def notifyViewLocationChanged(self, view, location):  # type: ignore[override]
             try:
@@ -213,8 +220,8 @@ def _register_sidebar() -> None:
             """Sidebar lifecycle callback."""
             try:
                 self.panel.shutdown()
-            except Exception:
-                pass
+            except Exception as e:
+                log_debug(f"RikuganSidebarWidget.closing panel.shutdown failed: {e}")
 
     class RikuganSidebarWidgetType(SidebarWidgetType):
         def __init__(self):

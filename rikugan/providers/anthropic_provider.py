@@ -267,8 +267,8 @@ class AnthropicProvider(LLMProvider):
                 retry_hdr = getattr(resp, "headers", {}).get("retry-after", "")
                 try:
                     retry_after = float(retry_hdr)
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    log_debug(f"Could not parse retry-after header {retry_hdr!r}: {e}")
             raise RateLimitError(provider="anthropic", retry_after=retry_after or 5.0) from e
         if isinstance(e, anthropic.BadRequestError):
             msg = str(e)

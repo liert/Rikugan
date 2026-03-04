@@ -144,8 +144,8 @@ def navigate_to(address: int) -> bool:
                 if ok:
                     set_current_address(ea)
                 return ok
-            except Exception:
-                pass
+            except Exception as e:
+                import sys; sys.stderr.write(f"[Rikugan] navigate_to_address cb failed at 0x{ea:x}: {e}\n")
         return False
 
     return False
@@ -166,8 +166,8 @@ def get_user_config_base_dir() -> str:
             user_directory = getattr(bn, "user_directory", None)
             if callable(user_directory):
                 return user_directory()
-        except Exception:
-            pass
+        except Exception as e:
+            import sys; sys.stderr.write(f"[Rikugan] get_user_config_base_dir failed: {e}\n")
         return os.path.join(str(Path.home()), ".binaryninja")
 
     return os.path.join(str(Path.home()), ".idapro")
@@ -199,15 +199,15 @@ def get_database_path() -> str:
                     path = getattr(fobj, fattr, None)
                     if path:
                         return str(path)
-        except Exception:
-            pass
+        except Exception as e:
+            import sys; sys.stderr.write(f"[Rikugan] get_database_path file attr failed: {e}\n")
 
         for attr in ("file_name", "filename", "path"):
             try:
                 path = getattr(bv, attr, None)
                 if path:
                     return str(path)
-            except Exception:
-                pass
+            except Exception as e:
+                import sys; sys.stderr.write(f"[Rikugan] get_database_path {attr} failed: {e}\n")
 
     return ""

@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from ..core.logging import log_debug
+
 
 @dataclass
 class MutationRecord:
@@ -181,7 +183,7 @@ def capture_pre_state(
             func = arguments.get("function_name", "")
             if func:
                 pre["old_comment"] = tool_executor("get_function_comment", {"function_name": func})
-    except Exception:
-        pass  # If we can't capture pre-state, continue without undo info
+    except Exception as e:
+        log_debug(f"capture_pre_state failed for {tool_name}: {e}")
 
     return pre
