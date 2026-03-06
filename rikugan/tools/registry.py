@@ -84,6 +84,16 @@ class ToolRegistry:
             if callable(obj) and isinstance(getattr(obj, "_tool_definition", None), ToolDefinition):
                 self.register(obj._tool_definition)
 
+    def unregister_by_prefix(self, prefix: str) -> int:
+        """Remove all tools whose name starts with *prefix*. Returns count removed."""
+        to_remove = [name for name in self._tools if name.startswith(prefix)]
+        for name in to_remove:
+            del self._tools[name]
+        if to_remove:
+            self._schema_cache = None
+            log_debug(f"Unregistered {len(to_remove)} tools with prefix {prefix!r}")
+        return len(to_remove)
+
     def get(self, name: str) -> Optional[ToolDefinition]:
         return self._tools.get(name)
 

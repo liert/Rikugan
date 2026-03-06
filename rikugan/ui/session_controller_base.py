@@ -385,6 +385,20 @@ class SessionControllerBase:
             session.provider_name = self.config.provider.name
             session.model_name = self.config.provider.model
 
+    def reload_mcp(self) -> None:
+        """Reload MCP config and restart servers in the background.
+
+        Safe to call at any time — stops existing servers first, then
+        re-reads the config and starts newly-enabled servers.
+        """
+        thread = threading.Thread(
+            target=self._mcp_manager.reload,
+            args=(self._tool_registry,),
+            daemon=True,
+            name="rikugan-mcp-reload",
+        )
+        thread.start()
+
     def shutdown(self) -> None:
         self._runtime_shutdown.set()
         if self._runtime_init_thread.is_alive():

@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from typing import Callable, Dict, List, Optional
 
+from ..constants import MCP_TOOL_PREFIX
 from ..core.logging import log_debug, log_error, log_info
 from ..tools.registry import ToolRegistry
 from .config import MCPServerConfig, load_mcp_config
@@ -99,3 +100,21 @@ class MCPManager:
         """Get a client by server name."""
         with self._lock:
             return self._clients.get(name)
+
+    def reload(
+        self,
+        registry: ToolRegistry,
+        config_path: str = "",
+        on_complete: Optional[Callable[[str, int], None]] = None,
+    ) -> None:
+        """Reload MCP config and restart servers.
+
+        Stops all running servers, removes stale MCP tools from the
+        registry, re-reads the config file, and starts any newly-enabled
+        servers.  Safe to call from a background thread.
+        """
+        log_info("MCP: reloading configuration")
+        self.stop_all()
+        registry.unregister_by_prefix(MCP_TOOL_PREFIX)
+        self.load_config(config_path)
+        self.start_servers(registry, on_complete=on_complete)

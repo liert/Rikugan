@@ -641,6 +641,7 @@ class RikuganPanelCore(QWidget):
             if result:
                 self._config.save()
                 self._ctrl.update_settings()
+                self._ctrl.reload_mcp()
                 self._context_bar.set_model(self._config.provider.model)
                 log_info(f"Settings updated: {self._config.provider.name}/{self._config.provider.model}")
             dlg.setParent(None)
