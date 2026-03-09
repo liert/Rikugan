@@ -61,9 +61,13 @@ The agent really ***lives*** and ***breathes*** reversing.
 
 **Memory** — Findings are saved to `RIKUGAN.md` next to your database, persisting across sessions.
 
-**Profiles** — Control which data the LLM can access, restrict tools, and define custom rules — useful for private analysis.
-
 **Skills & MCP** — 12 built-in skills, custom skill support, and MCP server integration. Reuse skills and MCP servers from Claude Code and Codex.
+
+### Profiles
+
+Profiles let you customize the agent to fit your analysis needs. They give you granular control over which data the LLM can read, restrict which tools it can use, and let you define custom rules to filter data.
+
+![alt text](assets/profile.png)
 
 ## Recommended Providers
 
