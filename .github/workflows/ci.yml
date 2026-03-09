@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   lint:
@@ -134,28 +133,3 @@ jobs:
 
           print(f'Advisory: {len(other)} non-security finding(s) in changed files (not blocking)')
           "
-
-      - name: Post findings comment
-        if: always()
-        continue-on-error: true
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            let body = '';
-            try {
-              const changed = fs.readFileSync('/tmp/changed_files.txt', 'utf8').trim().split('\n').filter(Boolean);
-              const data = JSON.parse(fs.readFileSync('.desloppify/query.json', 'utf8'));
-              const score = data.objective_score;
-              const emoji = score >= 95 ? '✅' : score >= 90 ? '⚠️' : '❌';
-              body = `${emoji} **Desloppify** — objective score: **${score}/100**\n`;
-              body += `Scanned ${changed.length} changed file(s). Run \`desloppify issues\` locally for the full findings list.`;
-            } catch (e) {
-              body = '⚠️ Desloppify could not produce a report.';
-            }
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body
-            });
