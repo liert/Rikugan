@@ -13,6 +13,7 @@ from .message_widgets import (
     ExplorationFindingWidget,
     ExplorationPhaseWidget,
     QueuedMessageWidget,
+    ResearchNoteWidget,
     SubagentEventWidget,
     ThinkingWidget,
     UserMessageWidget,
@@ -226,6 +227,11 @@ class ChatView(QScrollArea):
         ):
             self._handle_exploration_event(event)
         elif etype in (
+            TurnEventType.RESEARCH_NOTE_SAVED,
+            TurnEventType.RESEARCH_NOTE_REVIEWED,
+        ):
+            self._handle_research_event(event)
+        elif etype in (
             TurnEventType.USER_QUESTION,
             TurnEventType.SAVE_APPROVAL_REQUEST,
         ):
@@ -365,6 +371,23 @@ class ChatView(QScrollArea):
                 )
             )
         self._scroll_to_bottom()
+
+    def _handle_research_event(self, event: TurnEvent) -> None:
+        meta = event.metadata
+        if event.type == TurnEventType.RESEARCH_NOTE_SAVED:
+            self._hide_thinking()
+            self._reset_tool_run()
+            self._insert_widget(
+                ResearchNoteWidget(
+                    title=event.text,
+                    genre=meta.get("genre", "general"),
+                    path=meta.get("path", ""),
+                    preview=meta.get("preview", ""),
+                    review_passed=meta.get("review_passed", True),
+                )
+            )
+            self._scroll_to_bottom()
+        # RESEARCH_NOTE_REVIEWED — no separate widget, info is in the saved event
 
     def _handle_subagent_event(self, event: TurnEvent) -> None:
         meta = event.metadata

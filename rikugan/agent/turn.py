@@ -34,6 +34,8 @@ class TurnEventType(str, Enum):
     SAVE_COMPLETED = "save_completed"
     SAVE_DISCARDED = "save_discarded"
     MUTATION_RECORDED = "mutation_recorded"
+    RESEARCH_NOTE_SAVED = "research_note_saved"
+    RESEARCH_NOTE_REVIEWED = "research_note_reviewed"
     SUBAGENT_SPAWNED = "subagent_spawned"
     SUBAGENT_PROGRESS = "subagent_progress"
     SUBAGENT_COMPLETED = "subagent_completed"
@@ -263,6 +265,40 @@ class TurnEvent:
             text=f"Discarded {patch_count} patches"
             + (" (original bytes restored)" if rolled_back else " (in-memory changes persist)"),
             metadata={"patch_count": patch_count, "rolled_back": rolled_back},
+        )
+
+    @staticmethod
+    def research_note_saved(
+        title: str,
+        genre: str,
+        path: str,
+        preview: str = "",
+        review_passed: bool = True,
+    ) -> TurnEvent:
+        return TurnEvent(
+            type=TurnEventType.RESEARCH_NOTE_SAVED,
+            text=title,
+            metadata={
+                "genre": genre,
+                "path": path,
+                "preview": preview,
+                "review_passed": review_passed,
+            },
+        )
+
+    @staticmethod
+    def research_note_reviewed(
+        title: str,
+        passed: bool,
+        feedback: str = "",
+    ) -> TurnEvent:
+        return TurnEvent(
+            type=TurnEventType.RESEARCH_NOTE_REVIEWED,
+            text=title,
+            metadata={
+                "passed": passed,
+                "feedback": feedback,
+            },
         )
 
     @staticmethod

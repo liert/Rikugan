@@ -517,6 +517,53 @@ class ExplorationFindingWidget(QFrame):
             layout.addWidget(rel_label)
 
 
+class ResearchNoteWidget(QFrame):
+    """Displays a research note saved event."""
+
+    def __init__(
+        self,
+        title: str,
+        genre: str,
+        path: str,
+        preview: str = "",
+        review_passed: bool = True,
+        parent: QWidget = None,
+    ):
+        super().__init__(parent)
+        self.setObjectName("message_tool")
+        accent = "#6a9955" if review_passed else "#d7ba7d"
+        self.setStyleSheet(f"QFrame#message_tool {{ border-color: {accent}; }}")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(2)
+
+        # Header row
+        header = QHBoxLayout()
+        icon = "\u2705" if review_passed else "\u270f"  # checkmark or pencil
+        self._title_label = QLabel(f"{icon}  {title}")
+        self._title_label.setStyleSheet(f"color: {accent}; font-weight: bold; font-size: 11px;")
+        header.addWidget(self._title_label)
+
+        self._genre_label = QLabel(f"#{genre}")
+        self._genre_label.setStyleSheet("color: #808080; font-size: 10px; font-style: italic;")
+        header.addWidget(self._genre_label)
+        header.addStretch()
+        layout.addLayout(header)
+
+        # Path
+        self._path_label = QLabel(path)
+        self._path_label.setStyleSheet("color: #606060; font-family: monospace; font-size: 10px;")
+        layout.addWidget(self._path_label)
+
+        # Preview
+        if preview:
+            self._preview_label = QLabel(preview)
+            self._preview_label.setWordWrap(True)
+            self._preview_label.setStyleSheet("color: #a0a0a0; font-size: 11px;")
+            layout.addWidget(self._preview_label)
+
+
 class SubagentEventWidget(QFrame):
     """Displays a subagent lifecycle event (spawned, completed, failed)."""
 

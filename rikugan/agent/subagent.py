@@ -12,7 +12,7 @@ from ..skills.registry import SkillRegistry
 from ..state.session import SessionState
 from ..tools.registry import ToolRegistry
 from .exploration_mode import KnowledgeBase
-from .turn import TurnEvent
+from .turn import TurnEvent, TurnEventType
 
 
 class SubagentRunner:
@@ -51,16 +51,30 @@ class SubagentRunner:
         """The session from the most recent subagent run."""
         return self._last_session
 
+    # Event types that must always be forwarded even in silent mode
+    # (approval gates and user questions require UI interaction).
+    _INTERACTIVE_EVENTS = frozenset(
+        {
+            TurnEventType.TOOL_APPROVAL_REQUEST,
+            TurnEventType.USER_QUESTION,
+        }
+    )
+
     def run_task(
         self,
         task: str,
         max_turns: int = 20,
         system_addendum: str = "",
+        silent: bool = False,
     ) -> Generator[TurnEvent, None, str]:
         """Run a general-purpose subagent task.
 
         Yields TurnEvents from the subagent so the UI can show progress.
         Returns the subagent's final assistant text as a string summary.
+
+        When *silent* is True, only interactive events (tool approval,
+        user questions) are forwarded — text, tool calls, and results
+        are suppressed from the parent UI.
 
         The subagent gets a clean session and runs the task as a normal
         agent loop (not exploration mode, not plan mode).
@@ -79,7 +93,7 @@ class SubagentRunner:
             parent_loop=self._parent_loop,
         )
 
-        log_info(f"Subagent started: task={task[:80]!r}, max_turns={max_turns}")
+        log_info(f"Subagent started: task={task[:80]!r}, max_turns={max_turns}, silent={silent}")
 
         # Prefix the task with a turn limit instruction
         augmented_task = (
@@ -93,8 +107,12 @@ class SubagentRunner:
 
         final_text = ""
         for event in loop.run(augmented_task):
-            # Forward all events to the parent so the UI shows progress
-            yield event
+            # In silent mode, only forward interactive events
+            if silent:
+                if event.type in self._INTERACTIVE_EVENTS:
+                    yield event
+            else:
+                yield event
 
             # Capture the last text_done as the final output
             if event.type.value == "text_done" and event.text:
