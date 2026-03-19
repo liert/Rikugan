@@ -279,6 +279,7 @@ class SettingsDialog(QDialog):
         # OAuth checkbox — controls keychain autoload
         self._oauth_cb = QCheckBox("Use OAuth from Claude Code (macOS Keychain)")
         self._oauth_cb.setChecked(self._config.oauth_consent_accepted)
+        self._oauth_cb.setVisible(self._config.provider.name == "anthropic")
         self._oauth_cb.setToolTip(
             "Auto-load your Claude Code OAuth token from the macOS Keychain.\n"
             "Requires accepting Anthropic's credential use policy."
