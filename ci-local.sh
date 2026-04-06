@@ -23,21 +23,70 @@ info() { echo -e "${YELLOW}▶ $1${RESET}"; }
 
 # ── Tool bootstrap ─────────────────────────────────────────────────────────────
 info "Checking tools..."
-NEED=()
-python3 -m ruff --version &>/dev/null || NEED+=(ruff)
-python3 -m mypy --version &>/dev/null || NEED+=(mypy)
+PYTHON_RUN=(python3)
+DESLOPPY_CMD=()
+HAVE_PYTEST=false
+HAVE_DESLOPPIFY=false
 
-if [[ ${#NEED[@]} -gt 0 ]]; then
-    echo "  Installing missing tools: ${NEED[*]}"
-    pip3 install --quiet "${NEED[@]}"
+if command -v uv &>/dev/null; then
+    PYTHON_RUN=(uv run --with ruff --with mypy --with pytest --with desloppify python)
+    DESLOPPY_CMD=(uv run --with ruff --with mypy --with pytest --with desloppify desloppify)
+else
+    NEED=()
+    python3 -m ruff --version &>/dev/null || NEED+=(ruff)
+    python3 -m mypy --version &>/dev/null || NEED+=(mypy)
+    python3 -m pytest --version &>/dev/null || NEED+=(pytest)
+    if [[ ${#NEED[@]} -gt 0 ]]; then
+        echo "  Installing missing tools: ${NEED[*]}"
+        pip3 install --quiet --break-system-packages "${NEED[@]}"
+    fi
+    if command -v desloppify &>/dev/null; then
+        DESLOPPY_CMD=(desloppify)
+    fi
 fi
 
+run_py() {
+    "${PYTHON_RUN[@]}" "$@"
+}
+
+run_desloppify() {
+    "${DESLOPPY_CMD[@]}" "$@"
+}
+
+if ! run_py -m ruff --version &>/dev/null; then
+    fail "tool bootstrap" "ruff unavailable"
+    echo -e "${RED}${BOLD}FAILED${RESET} — $FAIL check(s) failed, $PASS passed"
+    exit 1
+fi
+
+if ! run_py -m mypy --version &>/dev/null; then
+    fail "tool bootstrap" "mypy unavailable"
+    echo -e "${RED}${BOLD}FAILED${RESET} — $FAIL check(s) failed, $PASS passed"
+    exit 1
+fi
+
+if run_py -m pytest --version &>/dev/null; then
+    HAVE_PYTEST=true
+else
+    RESULTS+=("${YELLOW}⚠${RESET} pytest: unavailable, skipped")
+fi
+
+if [[ ${#DESLOPPY_CMD[@]} -gt 0 ]] && run_desloppify --version &>/dev/null; then
+    HAVE_DESLOPPIFY=true
+else
+    RESULTS+=("${YELLOW}⚠${RESET} desloppify: unavailable, skipped")
+fi
+
+trap 'unset -f run_py run_desloppify' EXIT
+
+# shellcheck disable=SC2317
+:
 # ── 1. Ruff — format check ─────────────────────────────────────────────────────
 info "[1/5] Ruff format..."
 if $FIX; then
-    python3 -m ruff format rikugan/ && ok "ruff format (auto-fixed)" || fail "ruff format" "failed"
+    run_py -m ruff format rikugan/ && ok "ruff format (auto-fixed)" || fail "ruff format" "failed"
 else
-    if python3 -m ruff format --check rikugan/ 2>&1; then
+    if run_py -m ruff format --check rikugan/ 2>&1; then
         ok "ruff format"
     else
         fail "ruff format" "run with --fix to auto-fix"
@@ -47,13 +96,13 @@ fi
 # ── 2. Ruff — lint (config in pyproject.toml) ────────────────────────────────
 info "[2/5] Ruff lint..."
 if $FIX; then
-    if python3 -m ruff check rikugan/ --fix 2>&1; then
+    if run_py -m ruff check rikugan/ --fix 2>&1; then
         ok "ruff lint (auto-fixed)"
     else
         fail "ruff lint" "see above"
     fi
 else
-    if python3 -m ruff check rikugan/ 2>&1; then
+    if run_py -m ruff check rikugan/ 2>&1; then
         ok "ruff lint"
     else
         fail "ruff lint" "see above"
@@ -62,7 +111,7 @@ fi
 
 # ── 3. Mypy — core modules only (config in pyproject.toml) ───────────────────
 info "[3/5] Mypy (core + providers)..."
-MYPY_OUT=$(python3 -m mypy rikugan/core rikugan/providers --pretty \
+MYPY_OUT=$(run_py -m mypy rikugan/core rikugan/providers --pretty \
     2>&1) && MYPY_OK=true || MYPY_OK=false
 
 if $MYPY_OK; then
@@ -80,8 +129,8 @@ fi
 
 # ── 4. Pytest ─────────────────────────────────────────────────────────────────
 info "[4/5] Pytest..."
-if python3 -m pytest --version &>/dev/null; then
-    if python3 -m pytest tests/ --tb=short -q 2>&1; then
+if $HAVE_PYTEST; then
+    if run_py -m pytest tests/ --tb=short -q 2>&1; then
         ok "pytest"
     else
         fail "pytest" "see above"
@@ -93,33 +142,15 @@ fi
 # ── 5. Desloppify — objective score gate ──────────────────────────────────────
 info "[5/5] Desloppify (objective score)..."
 
-# Prefer uv for consistent Python 3.11 scoring (matches GitHub Actions)
-DESLOPPY_CMD=""
-if ! command -v uv &>/dev/null; then
-    echo -e "  ${YELLOW}uv not found. Install uv (Python version management) for reproducible scores matching CI.${RESET}"
-    read -r -p "  Install uv? (Y/n) " _UV_REPLY
-    if [[ "${_UV_REPLY:-Y}" =~ ^[Yy]$ ]]; then
-        pip3 install --quiet uv --break-system-packages 2>/dev/null || pip3 install --quiet uv
-        hash -r
-    fi
-fi
-
-if command -v uv &>/dev/null; then
-    uv add desloppify --dev --quiet 2>/dev/null || true
-    DESLOPPY_CMD="uv run desloppify"
-elif command -v desloppify &>/dev/null; then
-    DESLOPPY_CMD="desloppify"
-fi
-
-if [[ -n "$DESLOPPY_CMD" ]]; then
-    $DESLOPPY_CMD scan --profile objective --no-badge 2>&1 | tail -5
+if $HAVE_DESLOPPIFY; then
+    run_desloppify scan --profile objective --no-badge 2>&1 | tail -5
 
     SCORE=$(python3 -c "
 import json, sys
 try:
     data = json.load(open('.desloppify/query.json'))
     print(data.get('objective_score', 0))
-except Exception as e:
+except Exception:
     print(0)
 ")
     BASELINE=89.0

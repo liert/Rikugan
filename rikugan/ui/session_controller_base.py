@@ -91,12 +91,12 @@ class SessionControllerBase:
                 return
             self._mcp_manager.load_config()
 
-            # Load enabled external MCP servers
-            from ..core.external_sources import discover_all_external_mcp
-
-            external_mcp = discover_all_external_mcp()
             enabled_set = set(self.config.enabled_external_mcp)
             if enabled_set:
+                # Load enabled external MCP servers only when explicitly configured.
+                from ..core.external_sources import discover_all_external_mcp
+
+                external_mcp = discover_all_external_mcp()
                 for source_key, servers in external_mcp.items():
                     enabled = [s for s in servers if f"{source_key}:{s.name}" in enabled_set]
                     if enabled:

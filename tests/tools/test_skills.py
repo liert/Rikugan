@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from tests.mocks.ida_mock import install_ida_mocks
@@ -91,6 +92,38 @@ class TestDiscoverSkills(unittest.TestCase):
             self.assertEqual(skills[0].description, "Find security bugs")
             self.assertEqual(skills[0].tags, ["security"])
             self.assertIn("security auditor", skills[0].body)
+
+    def test_discover_does_not_eagerly_load_references(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_dir = os.path.join(tmpdir, "vuln-audit")
+            refs_dir = os.path.join(skill_dir, "references")
+            os.makedirs(refs_dir)
+            with open(os.path.join(skill_dir, "SKILL.md"), "w") as f:
+                f.write("---\nname: Vulnerability Audit\ndescription: Find security bugs\n---\nBody content.\n")
+            with open(os.path.join(refs_dir, "extra.md"), "w") as f:
+                f.write("Reference content")
+
+            with patch("rikugan.skills.loader._load_references") as load_refs:
+                skills = discover_skills(tmpdir)
+
+            self.assertEqual(len(skills), 1)
+            self.assertFalse(load_refs.called)
+            self.assertIsNone(skills[0]._body)
+            self.assertIn("Reference content", skills[0].body)
+
+    def test_discover_keeps_body_lazy(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_dir = os.path.join(tmpdir, "vuln-audit")
+            os.makedirs(skill_dir)
+            with open(os.path.join(skill_dir, "SKILL.md"), "w") as f:
+                f.write("---\nname: Vulnerability Audit\ndescription: Find security bugs\n---\nBody content.\n")
+
+            skills = discover_skills(tmpdir)
+
+            self.assertEqual(len(skills), 1)
+            self.assertIsNone(skills[0]._body)
+            self.assertEqual(skills[0].body, "Body content.")
+            self.assertEqual(skills[0]._body, "Body content.")
 
     def test_missing_directory(self):
         skills = discover_skills("/nonexistent/path")

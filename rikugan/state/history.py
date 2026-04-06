@@ -15,6 +15,8 @@ from ..core.logging import log_debug
 from ..core.types import Message
 from .session import SessionState
 
+_SUMMARY_SUFFIX = ".summary.json"
+
 
 def _normalize_db_path(path: str) -> str:
     """Return a stable canonical DB path for session filtering."""
@@ -26,6 +28,19 @@ def _normalize_db_path(path: str) -> str:
         return path
 
 
+def _build_summary_data(data: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+    return {
+        "id": data.get("id", fallback_id),
+        "created_at": data.get("created_at", 0),
+        "provider": data.get("provider_name", ""),
+        "model": data.get("model_name", ""),
+        "idb_path": _normalize_db_path(data.get("idb_path", "")),
+        "db_instance_id": data.get("db_instance_id", ""),
+        "messages": len(data.get("messages", [])),
+        "description": data.get("description", ""),
+    }
+
+
 class SessionHistory:
     """Manages saved sessions on disk."""
 
@@ -33,9 +48,15 @@ class SessionHistory:
         self._dir = os.path.join(config.checkpoints_dir, "sessions")
         os.makedirs(self._dir, exist_ok=True)
 
+    def _session_path(self, session_id: str) -> str:
+        return os.path.join(self._dir, f"{session_id}.json")
+
+    def _summary_path(self, session_id: str) -> str:
+        return os.path.join(self._dir, f"{session_id}{_SUMMARY_SUFFIX}")
+
     def save_session(self, session: SessionState, description: str = "") -> str:
         """Save a session and return the file path."""
-        path = os.path.join(self._dir, f"{session.id}.json")
+        path = self._session_path(session.id)
         db_path = _normalize_db_path(session.idb_path)
         data = {
             "schema_version": SESSION_SCHEMA_VERSION,
@@ -55,11 +76,14 @@ class SessionHistory:
             data["description"] = description
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
+        summary_path = self._summary_path(session.id)
+        with open(summary_path, "w") as f:
+            json.dump(_build_summary_data(data, session.id), f, indent=2)
         return path
 
     def load_session(self, session_id: str) -> SessionState | None:
         """Load a session by ID. Returns None if not found or corrupt."""
-        path = os.path.join(self._dir, f"{session_id}.json")
+        path = self._session_path(session_id)
         if not os.path.exists(path):
             return None
         try:
@@ -89,22 +113,12 @@ class SessionHistory:
         sessions = []
         normalized_target = _normalize_db_path(idb_path)
         for fname in sorted(os.listdir(self._dir), reverse=True):
-            if not fname.endswith(".json"):
+            if not fname.endswith(_SUMMARY_SUFFIX):
                 continue
             path = os.path.join(self._dir, fname)
             try:
                 with open(path) as f:
-                    data = json.load(f)
-                entry = {
-                    "id": data.get("id", fname[:-5]),
-                    "created_at": data.get("created_at", 0),
-                    "provider": data.get("provider_name", ""),
-                    "model": data.get("model_name", ""),
-                    "idb_path": _normalize_db_path(data.get("idb_path", "")),
-                    "db_instance_id": data.get("db_instance_id", ""),
-                    "messages": len(data.get("messages", [])),
-                    "description": data.get("description", ""),
-                }
+                    entry = json.load(f)
                 # When db_instance_id is provided, use it as the primary key
                 # (UUIDs are globally unique, so path matching is redundant).
                 # This handles BN where the path may change between raw binary
@@ -120,8 +134,8 @@ class SessionHistory:
                     if entry["idb_path"]:
                         continue
                 sessions.append(entry)
-            except (json.JSONDecodeError, OSError) as exc:
-                log_debug(f"Skipping corrupt session file {fname}: {exc}")
+            except (json.JSONDecodeError, OSError, KeyError) as exc:
+                log_debug(f"Skipping corrupt session summary {fname}: {exc}")
                 continue
         return sessions
 
@@ -134,8 +148,9 @@ class SessionHistory:
         return self.load_session(sessions[0]["id"])
 
     def delete_session(self, session_id: str) -> bool:
-        path = os.path.join(self._dir, f"{session_id}.json")
-        if os.path.exists(path):
-            os.remove(path)
-            return True
-        return False
+        removed = False
+        for path in (self._session_path(session_id), self._summary_path(session_id)):
+            if os.path.exists(path):
+                os.remove(path)
+                removed = True
+        return removed

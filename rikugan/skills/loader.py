@@ -244,7 +244,7 @@ def discover_skills(skills_dir: str) -> list[SkillDefinition]:
             with open(md_path, encoding="utf-8") as f:
                 text = f.read()
 
-            fm_text, body_text = _split_frontmatter(text)
+            fm_text, _body_text = _split_frontmatter(text)
             fm = _parse_frontmatter(fm_text) if fm_text else {}
 
             # Extract author/version from top-level or nested metadata
@@ -254,13 +254,6 @@ def discover_skills(skills_dir: str) -> list[SkillDefinition]:
             if isinstance(meta, dict):
                 author = author or meta.get("author", "")
                 version = version or meta.get("version", "")
-
-            # Build body eagerly from the already-read text to avoid a
-            # second file read.  Append reference files if present.
-            body_text = body_text.strip()
-            refs = _load_references(skill_dir)
-            if refs:
-                body_text += "\n\n" + refs
 
             # Parse triggers — list of keywords that auto-activate this skill
             raw_triggers = fm.get("triggers", [])
@@ -279,7 +272,7 @@ def discover_skills(skills_dir: str) -> list[SkillDefinition]:
                 author=author,
                 version=version,
                 frontmatter=fm,
-                _body=body_text,
+                _body=None,
                 _md_path=md_path,
             )
 

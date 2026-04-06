@@ -11,6 +11,8 @@ from ..core.sanitize import sanitize_binary_context, sanitize_memory
 from .prompts.binja import BINJA_BASE_PROMPT
 from .prompts.ida import IDA_BASE_PROMPT
 
+_PERSISTENT_MEMORY_CACHE: dict[str, tuple[tuple[int | None, int | None], str | None]] = {}
+
 if TYPE_CHECKING:
     from ..core.profile import AnalysisProfile
 
@@ -31,7 +33,23 @@ def _load_persistent_memory(idb_dir: str = "") -> str | None:
 
     md_path = os.path.join(idb_dir, "RIKUGAN.md")
     if not os.path.isfile(md_path):
+        _PERSISTENT_MEMORY_CACHE.pop(md_path, None)
         return None
+
+    try:
+        stat_result = os.stat(md_path)
+        version = (
+            getattr(stat_result, "st_mtime_ns", None),
+            getattr(stat_result, "st_size", None),
+        )
+    except OSError as e:
+        log_debug(f"Failed to stat RIKUGAN.md: {e}")
+        _PERSISTENT_MEMORY_CACHE.pop(md_path, None)
+        return None
+
+    cached = _PERSISTENT_MEMORY_CACHE.get(md_path)
+    if cached is not None and cached[0] == version:
+        return cached[1]
 
     try:
         with open(md_path, encoding="utf-8") as f:
@@ -41,12 +59,14 @@ def _load_persistent_memory(idb_dir: str = "") -> str | None:
                     lines.append(f"\n... (truncated at {_MAX_MEMORY_LINES} lines)")
                     break
                 lines.append(line)
-        content = "".join(lines).strip()
+        content = "".join(lines).strip() or None
+        _PERSISTENT_MEMORY_CACHE[md_path] = (version, content)
         if content:
             log_debug(f"Loaded persistent memory from {md_path} ({len(lines)} lines)")
             return content
     except OSError as e:
         log_debug(f"Failed to load RIKUGAN.md: {e}")
+        _PERSISTENT_MEMORY_CACHE.pop(md_path, None)
 
     return None
 

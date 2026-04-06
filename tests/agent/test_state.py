@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from tests.mocks.ida_mock import install_ida_mocks
@@ -145,6 +146,45 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(len(sessions), 3)
         ids = {s["id"] for s in sessions}
         self.assertEqual(ids, {"sess0", "sess1", "sess2"})
+
+    def test_list_sessions_reads_summary_without_loading_messages(self):
+        history = SessionHistory(self.config)
+        session = SessionState(id="summary-only", provider_name="anthropic", model_name="claude")
+        session.add_message(Message(role=Role.USER, content="hello"))
+        history.save_session(session, description="desc")
+
+        real_load = json.load
+
+        def fail_if_messages_loaded(fp, *args, **kwargs):
+            data = real_load(fp, *args, **kwargs)
+            self.assertEqual(set(data.keys()), {"id", "created_at", "provider", "model", "idb_path", "db_instance_id", "messages", "description"})
+            self.assertIsInstance(data["messages"], int)
+            return data
+
+        with patch("rikugan.state.history.json.load", side_effect=fail_if_messages_loaded):
+            sessions = history.list_sessions()
+
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["id"], "summary-only")
+        self.assertEqual(sessions[0]["messages"], 1)
+
+    def test_get_latest_session_uses_summary_metadata(self):
+        history = SessionHistory(self.config)
+        old = SessionState(id="old", created_at=1000.0)
+        old.add_message(Message(role=Role.USER, content="old"))
+        history.save_session(old)
+
+        new = SessionState(id="new", created_at=2000.0)
+        new.add_message(Message(role=Role.USER, content="new"))
+        history.save_session(new)
+
+        with patch.object(history, "load_session", wraps=history.load_session) as load_session:
+            latest = history.get_latest_session()
+
+        self.assertIsNotNone(latest)
+        self.assertEqual(latest.id, "new")
+        self.assertEqual(load_session.call_count, 1)
+        self.assertEqual(load_session.call_args.args[0], "new")
 
     def test_get_latest_session(self):
         history = SessionHistory(self.config)

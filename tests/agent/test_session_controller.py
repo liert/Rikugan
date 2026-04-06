@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from tests.mocks.ida_mock import install_ida_mocks
@@ -147,6 +148,28 @@ class TestIdaSessionController(unittest.TestCase):
         self.assertEqual(restored.messages[1].tool_calls[0].name, "get_info")
         self.assertEqual(restored.messages[2].tool_results[0].content, "data here")
         ctrl2.shutdown()
+
+    def test_runtime_init_skips_external_mcp_discovery_when_none_enabled(self):
+        self.ctrl.shutdown()
+
+        with patch.object(self.cfg, "enabled_external_mcp", []):
+            with patch("rikugan.core.external_sources.discover_all_external_mcp") as discover_mcp:
+                ctrl = IdaSessionController(self.cfg)
+                ctrl._runtime_init_done.wait(timeout=5.0)
+                ctrl.shutdown()
+
+        self.assertFalse(discover_mcp.called)
+
+    def test_runtime_init_discovers_external_mcp_when_enabled(self):
+        self.ctrl.shutdown()
+
+        with patch.object(self.cfg, "enabled_external_mcp", ["claude:test"]):
+            with patch("rikugan.core.external_sources.discover_all_external_mcp", return_value={"claude": [], "codex": []}) as discover_mcp:
+                ctrl = IdaSessionController(self.cfg)
+                ctrl._runtime_init_done.wait(timeout=5.0)
+                ctrl.shutdown()
+
+        self.assertTrue(discover_mcp.called)
 
     def test_shutdown_is_idempotent(self):
         self.ctrl.shutdown()

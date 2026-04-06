@@ -168,6 +168,28 @@ class TestRikuganPlugmodRun(unittest.TestCase):
         mock_toggle.assert_called_once()
 
 
+class TestRikuganPlugmodTogglePanel(unittest.TestCase):
+    def test_toggle_panel_imports_panel_directly_without_pkg_walk(self):
+        pm = _make_plugmod()
+        mock_panel_instance = MagicMock()
+        mock_panel_cls = MagicMock(return_value=mock_panel_instance)
+        real_import_module = importlib.import_module
+
+        def fake_import(name, *args, **kwargs):
+            if name == "rikugan.ida.ui.panel":
+                return types.SimpleNamespace(RikuganPanel=mock_panel_cls)
+            return real_import_module(name)
+
+        with patch.object(rp.importlib, "import_module", side_effect=fake_import) as mock_import:
+            with patch("pkgutil.iter_modules", side_effect=AssertionError("pkgutil.iter_modules should not be used")):
+                pm._toggle_panel()
+
+        mock_panel_cls.assert_called_once()
+        mock_panel_instance.show.assert_called_once()
+        imported = [call.args[0] for call in mock_import.call_args_list]
+        self.assertIn("rikugan.ida.ui.panel", imported)
+
+
 # ---------------------------------------------------------------------------
 # PLUGIN_ENTRY
 # ---------------------------------------------------------------------------

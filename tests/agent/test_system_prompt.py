@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from tests.mocks.ida_mock import install_ida_mocks
 install_ida_mocks()
 
-from rikugan.agent.system_prompt import build_system_prompt, _BASE_PROMPT
+from rikugan.agent.system_prompt import build_system_prompt, _BASE_PROMPT, _load_persistent_memory
 
 
 class TestBuildSystemPrompt(unittest.TestCase):
@@ -103,6 +106,74 @@ class TestBasePromptContent(unittest.TestCase):
 
     def test_has_analysis_section(self):
         self.assertIn("## Analysis Approach", _BASE_PROMPT)
+
+
+class TestPersistentMemoryCaching(unittest.TestCase):
+    def test_reuses_cached_memory_when_file_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = os.path.join(tmpdir, "RIKUGAN.md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("first value\n")
+
+            first = _load_persistent_memory(tmpdir)
+            self.assertEqual(first, "first value")
+
+            real_open = open
+            with patch("builtins.open", wraps=real_open) as mock_open:
+                second = _load_persistent_memory(tmpdir)
+
+            self.assertEqual(second, "first value")
+            self.assertEqual(mock_open.call_count, 0)
+
+    def test_invalidates_cache_when_file_changes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = os.path.join(tmpdir, "RIKUGAN.md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("first value\n")
+
+            first = _load_persistent_memory(tmpdir)
+            self.assertEqual(first, "first value")
+
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("second value\n")
+
+            second = _load_persistent_memory(tmpdir)
+            self.assertEqual(second, "second value")
+
+    def test_invalidates_cache_when_size_changes_with_same_mtime(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = os.path.join(tmpdir, "RIKUGAN.md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("first value\n")
+
+            first = _load_persistent_memory(tmpdir)
+            self.assertEqual(first, "first value")
+
+            same_stat = SimpleNamespace(st_mtime=1234.0, st_mtime_ns=1234000000000, st_size=len("second value is longer\n"), st_mode=33188)
+            with patch("os.stat", return_value=same_stat):
+                with open(md_path, "w", encoding="utf-8") as f:
+                    f.write("second value is longer\n")
+                second = _load_persistent_memory(tmpdir)
+
+            self.assertEqual(second, "second value is longer")
+
+    def test_invalidates_cache_when_mtime_ns_changes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = os.path.join(tmpdir, "RIKUGAN.md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("first value\n")
+
+            with patch("os.stat", return_value=SimpleNamespace(st_mtime=100.0, st_mtime_ns=1000, st_size=len("first value\n"), st_mode=33188)):
+                first = _load_persistent_memory(tmpdir)
+            self.assertEqual(first, "first value")
+
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write("second value\n")
+
+            with patch("os.stat", return_value=SimpleNamespace(st_mtime=100.0, st_mtime_ns=2000, st_size=len("second value\n"), st_mode=33188)):
+                second = _load_persistent_memory(tmpdir)
+
+            self.assertEqual(second, "second value")
 
 
 if __name__ == "__main__":

@@ -83,55 +83,23 @@ class RikuganPlugmod(idaapi.plugmod_t):
                 self._panel.show()
                 return
 
-            # Bulk-load all rikugan.* modules via importlib.import_module().
-            #
-            # importlib.import_module() routes through CPython's internal
-            # _gcd_import(), which does NOT call builtins.__import__.  This
-            # means Shiboken's __import__ hook is never invoked, avoiding
-            # both the UAF crash (from swapping builtins.__import__) and the
-            # spurious "No module named 'ida_...'" errors (from Shiboken's
-            # hook failing to resolve IDA modules during bulk loading).
-            #
-            # All ida_* imports inside rikugan modules also use
-            # importlib.import_module() for the same reason.
-            _log("_toggle_panel: importing rikugan modules")
-            import pkgutil
-            import rikugan
+            # Import only the panel entry module here.  Its dependency chain
+            # loads the rest lazily as needed, avoiding a full recursive
+            # package walk on first panel open.
+            _log("_toggle_panel: importing panel module")
 
-            # Use iter_modules (discovery only, no __import__) + manual
-            # recursion via importlib.import_module().  pkgutil.walk_packages()
-            # calls __import__() internally for sub-packages, which goes
-            # through Shiboken's hook and can trigger UAF crashes.
-            def _load_submodules(pkg):
-                for _finder, modname, ispkg in pkgutil.iter_modules(
-                    pkg.__path__, prefix=pkg.__name__ + "."
-                ):
-                    try:
-                        mod = importlib.import_module(modname)
-                        if ispkg:
-                            _load_submodules(mod)
-                    except Exception as e:
-                        import sys; sys.stderr.write(f"[Rikugan] Skipping {modname}: {e}\n")
-
-            # Temporarily bypass Shiboken's __import__ hook during bulk
-            # loading.  importlib.import_module() itself avoids __import__,
-            # but *executed* module code (e.g. ``from PySide6 import ...``
-            # in qt_compat.py) emits IMPORT_NAME bytecode that calls
-            # builtins.__import__.  On Python 3.14 this can cause a deep
-            # recursive re-entry into Shiboken that triggers a UAF crash.
-            #
-            # PySide6 modules are already in sys.modules (loaded by IDA's
-            # own UI), so CPython's import machinery just needs a dict
-            # lookup — Shiboken's type-wrapper initialisation is not needed.
+            # Temporarily bypass Shiboken's __import__ hook while the panel
+            # module and its direct imports execute. importlib.import_module()
+            # itself avoids __import__, but module code can still emit
+            # IMPORT_NAME bytecode that reaches builtins.__import__.
             saved_import = builtins.__import__
             builtins.__import__ = importlib.__import__
             try:
-                _load_submodules(rikugan)
+                RikuganPanel = importlib.import_module("rikugan.ida.ui.panel").RikuganPanel
             finally:
                 builtins.__import__ = saved_import
 
-            _log("_toggle_panel: all rikugan modules loaded")
-            RikuganPanel = importlib.import_module("rikugan.ida.ui.panel").RikuganPanel
+            _log("_toggle_panel: panel module loaded")
 
             _log("_toggle_panel: creating RikuganPanel()")
             self._panel = RikuganPanel()
