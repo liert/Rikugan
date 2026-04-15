@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .styles import maybe_host_stylesheet
 from .qt_compat import (
     QAbstractItemView,
     QCheckBox,
@@ -26,6 +25,7 @@ from .qt_compat import (
     Signal,
     qt_flags,
 )
+from .styles import maybe_host_stylesheet
 
 _BTN_STYLE = (
     "QPushButton { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "

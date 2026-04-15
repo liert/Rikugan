@@ -12,7 +12,6 @@ from ..core.types import ModelInfo
 from ..providers.auth_cache import resolve_auth_cached
 from ..providers.ollama_provider import DEFAULT_OLLAMA_URL
 from ..providers.registry import ProviderRegistry
-from .styles import maybe_host_stylesheet
 from .qt_compat import (
     QApplication,
     QCheckBox,
@@ -33,6 +32,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import maybe_host_stylesheet
 
 _DEFAULT_MINIMAX_URL = "https://api.minimax.io/anthropic"
 _CUSTOM_PROVIDER_URL_PLACEHOLDER = "https://api.example.com/v1"

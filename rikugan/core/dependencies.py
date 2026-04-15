@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import sys
 from dataclasses import dataclass
 
 
@@ -41,7 +40,7 @@ def _module_available(module_name: str) -> bool:
 
 def get_optional_dependency_statuses() -> list[DependencyStatus]:
     """Return current availability for optional runtime dependencies."""
-    statuses = [
+    return [
         DependencyStatus(
             key=key,
             module=module,
@@ -51,20 +50,6 @@ def get_optional_dependency_statuses() -> list[DependencyStatus]:
         )
         for key, module, package_name, feature in _OPTIONAL_DEPENDENCIES
     ]
-
-    # Python 3.11+ bundles tomllib, so the tomli backport is only optional there.
-    if sys.version_info < (3, 11):
-        statuses.append(
-            DependencyStatus(
-                key="tomli",
-                module="tomli",
-                package_name="tomli",
-                feature="external skills/MCP config discovery on Python 3.10",
-                available=_module_available("tomli"),
-            )
-        )
-
-    return statuses
 
 
 def get_missing_dependency_warnings() -> list[str]:

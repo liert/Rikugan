@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .styles import maybe_host_stylesheet
 from .qt_compat import (
     QAbstractItemView,
     QComboBox,
@@ -20,6 +19,7 @@ from .qt_compat import (
     Signal,
     qt_flags,
 )
+from .styles import maybe_host_stylesheet
 
 _STATUS_COLORS: dict[str, str] = {
     "PENDING": "#808080",

@@ -32,7 +32,7 @@ def _hex_luminance(color: str) -> float:
 
 def _blend_channel(a: int, b: int, amount: float) -> int:
     amount = max(0.0, min(1.0, amount))
-    return int(round(a + (b - a) * amount))
+    return round(a + (b - a) * amount)
 
 
 def blend_theme_color(color_a: str, color_b: str, amount: float) -> str:
@@ -44,10 +44,8 @@ def blend_theme_color(color_a: str, color_b: str, amount: float) -> str:
 
     ar, ag, ab = int(a[0:2], 16), int(a[2:4], 16), int(a[4:6], 16)
     br, bg, bb = int(b[0:2], 16), int(b[2:4], 16), int(b[4:6], 16)
-    return "#{:02x}{:02x}{:02x}".format(
-        _blend_channel(ar, br, amount),
-        _blend_channel(ag, bg, amount),
-        _blend_channel(ab, bb, amount),
+    return (
+        f"#{_blend_channel(ar, br, amount):02x}{_blend_channel(ag, bg, amount):02x}{_blend_channel(ab, bb, amount):02x}"
     )
 
 

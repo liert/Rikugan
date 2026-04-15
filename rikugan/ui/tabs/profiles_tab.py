@@ -14,7 +14,6 @@ from ...core.profile import (
     get_profile,
     list_profiles,
 )
-from ..styles import maybe_host_stylesheet
 from ..qt_compat import (
     QCheckBox,
     QComboBox,
@@ -32,6 +31,7 @@ from ..qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from ..styles import maybe_host_stylesheet
 
 if TYPE_CHECKING:
     from ..settings_service import SettingsService

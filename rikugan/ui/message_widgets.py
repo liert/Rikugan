@@ -7,7 +7,6 @@ import re as _re
 from typing import ClassVar
 
 from .markdown import md_to_html
-from .styles import host_stylesheet
 from .qt_compat import (
     QFrame,
     QHBoxLayout,
@@ -21,6 +20,7 @@ from .qt_compat import (
     QWidget,
     qt_flags,
 )
+from .styles import host_stylesheet
 
 _THINKING_PHRASES = [
     "analyzing binary structure...",
@@ -313,7 +313,7 @@ class _ThinkingBlock(QFrame):
         )
         self._content.setStyleSheet(
             host_stylesheet(
-                f"color: #606078; font-size: 12px;",
+                "color: #606078; font-size: 12px;",
                 f"color: #606078; {_native_text_style(size=12, italic=True)}",
             )
         )

@@ -5,7 +5,6 @@ Can be shown as an independent window (QDialog) or embedded in a layout.
 
 from __future__ import annotations
 
-from .styles import maybe_host_stylesheet
 from .qt_compat import (
     QFrame,
     QHBoxLayout,
@@ -14,6 +13,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import maybe_host_stylesheet
 
 _HEADER_STYLE = "color: #d4d4d4; font-weight: bold; font-size: 12px;"
 

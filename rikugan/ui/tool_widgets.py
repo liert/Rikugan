@@ -6,7 +6,6 @@ import json
 import re as _re
 from typing import ClassVar
 
-from .styles import host_stylesheet, use_native_host_theme
 from .qt_compat import (
     QColor,
     QFont,
@@ -23,6 +22,7 @@ from .qt_compat import (
     QWidget,
     qt_flags,
 )
+from .styles import host_stylesheet, use_native_host_theme
 
 _MAX_ARGS_DISPLAY = 2000
 _MAX_RESULT_DISPLAY = 3000

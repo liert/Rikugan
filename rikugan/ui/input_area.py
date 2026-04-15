@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from .styles import build_input_area_stylesheet, host_stylesheet, use_native_host_theme
 from .qt_compat import (
     QEvent,
     QFrame,
@@ -13,6 +12,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import build_input_area_stylesheet, host_stylesheet, use_native_host_theme
 
 
 class _SkillPopup(QFrame):
