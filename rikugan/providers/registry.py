@@ -2,24 +2,28 @@
 
 from __future__ import annotations
 
+import importlib
+from dataclasses import dataclass
 from typing import Any
 
+from ..core.dependencies import get_missing_dependency_warnings
 from ..core.errors import ProviderError
-from .anthropic_provider import AnthropicProvider
 from .base import LLMProvider
-from .gemini_provider import GeminiProvider
-from .minimax_provider import MiniMaxProvider
-from .ollama_provider import OllamaProvider
-from .openai_compat import OpenAICompatProvider
-from .openai_provider import OpenAIProvider
 
-_BUILTIN_PROVIDERS: dict[str, type[LLMProvider]] = {
-    "anthropic": AnthropicProvider,
-    "openai": OpenAIProvider,
-    "openai_compat": OpenAICompatProvider,
-    "gemini": GeminiProvider,
-    "ollama": OllamaProvider,
-    "minimax": MiniMaxProvider,
+
+@dataclass(frozen=True)
+class _ProviderSpec:
+    module_path: str
+    class_name: str
+
+
+_BUILTIN_PROVIDERS: dict[str, _ProviderSpec] = {
+    "anthropic": _ProviderSpec(".anthropic_provider", "AnthropicProvider"),
+    "openai": _ProviderSpec(".openai_provider", "OpenAIProvider"),
+    "openai_compat": _ProviderSpec(".openai_compat", "OpenAICompatProvider"),
+    "gemini": _ProviderSpec(".gemini_provider", "GeminiProvider"),
+    "ollama": _ProviderSpec(".ollama_provider", "OllamaProvider"),
+    "minimax": _ProviderSpec(".minimax_provider", "MiniMaxProvider"),
 }
 
 
@@ -27,20 +31,46 @@ class ProviderRegistry:
     """Factory for creating and managing LLM providers."""
 
     def __init__(self) -> None:
-        self._providers: dict[str, type[LLMProvider]] = dict(_BUILTIN_PROVIDERS)
+        self._providers: dict[str, _ProviderSpec] = dict(_BUILTIN_PROVIDERS)
+        self._provider_classes: dict[str, type[LLMProvider]] = {}
         self._instances: dict[str, LLMProvider] = {}
 
+    def _resolve_provider_class(self, name: str) -> type[LLMProvider]:
+        cached = self._provider_classes.get(name)
+        if cached is not None:
+            return cached
+
+        spec = self._providers.get(name)
+        if spec is None:
+            raise ProviderError(f"Unknown provider: {name}. Available: {self.list_providers()}")
+
+        try:
+            module = importlib.import_module(spec.module_path, package=__package__)
+            provider_cls = getattr(module, spec.class_name)
+        except (ImportError, AttributeError) as exc:
+            raise ProviderError(
+                f"Provider '{name}' could not be loaded: {exc}",
+                provider=name,
+            ) from exc
+
+        self._provider_classes[name] = provider_cls
+        return provider_cls
+
     def register(self, name: str, provider_cls: type[LLMProvider]) -> None:
-        self._providers[name] = provider_cls
+        self._provider_classes[name] = provider_cls
 
     def register_custom_providers(self, names: list[str]) -> None:
         """Register custom provider names as OpenAI-compatible endpoints."""
         for name in names:
             if name not in _BUILTIN_PROVIDERS:
-                self._providers[name] = OpenAICompatProvider
+                self._providers[name] = _ProviderSpec(".openai_compat", "OpenAICompatProvider")
 
     def list_providers(self) -> list[str]:
         return list(self._providers.keys())
+
+    def dependency_warnings(self) -> list[str]:
+        """Return user-facing warnings for missing optional runtime packages."""
+        return get_missing_dependency_warnings()
 
     def create(
         self,
@@ -51,12 +81,12 @@ class ProviderRegistry:
         **kwargs: Any,
     ) -> LLMProvider:
         """Create a new provider instance."""
-        cls = self._providers.get(name)
-        if cls is None:
-            raise ProviderError(f"Unknown provider: {name}. Available: {self.list_providers()}")
+        cls = self._resolve_provider_class(name)
 
-        # Custom OpenAI-compatible providers need their name passed through
-        if cls is OpenAICompatProvider and name != "openai_compat":
+        # Custom OpenAI-compatible providers need their name passed through.
+        if name not in _BUILTIN_PROVIDERS:
+            kwargs.setdefault("provider_name", name)
+        elif self._providers.get(name) == _BUILTIN_PROVIDERS["openai_compat"] and name != "openai_compat":
             kwargs.setdefault("provider_name", name)
 
         instance = cls(api_key=api_key, api_base=api_base, model=model, **kwargs)

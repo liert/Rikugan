@@ -59,8 +59,8 @@ if exist "%OLD_LINK%\" (
 :: ── Install Python dependencies ──────────────────────────────────
 call :install_requirements
 if !errorlevel! neq 0 (
-    echo [-] Failed to install Python dependencies from requirements.txt
-    exit /b 1
+    echo [!] Could not install one or more Python dependencies.
+    echo [!] Rikugan will still be installed, but features tied to missing packages will show warnings in the plugin.
 )
 
 if not exist "%PLUGINS_DIR%\"  mkdir "%PLUGINS_DIR%"

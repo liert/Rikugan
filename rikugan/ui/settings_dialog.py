@@ -32,6 +32,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import maybe_host_stylesheet
 
 _DEFAULT_MINIMAX_URL = "https://api.minimax.io/anthropic"
 _CUSTOM_PROVIDER_URL_PLACEHOLDER = "https://api.example.com/v1"
@@ -139,7 +140,7 @@ class _AddProviderDialog(QDialog):
         layout.addLayout(form)
 
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #f44747; font-size: 11px;")
+        self._error_label.setStyleSheet(maybe_host_stylesheet("color: #f44747; font-size: 11px;"))
         self._error_label.hide()
         layout.addWidget(self._error_label)
 
@@ -265,6 +266,16 @@ class SettingsDialog(QDialog):
         provider_group = QGroupBox("LLM Provider")
         provider_form = QFormLayout(provider_group)
 
+        warnings = self._registry.dependency_warnings()
+        self._dependency_label = QLabel()
+        self._dependency_label.setWordWrap(True)
+        self._dependency_label.setStyleSheet(maybe_host_stylesheet("color: #f5d98b; font-size: 11px;"))
+        if warnings:
+            self._dependency_label.setText("Warnings: " + " ".join(warnings))
+            provider_form.addRow(self._dependency_label)
+        else:
+            self._dependency_label.hide()
+
         provider_form.addRow("Provider:", self._build_provider_row())
 
         # API key — only show explicit user keys, NOT auto-resolved OAuth tokens
@@ -298,7 +309,7 @@ class SettingsDialog(QDialog):
 
     def _build_provider_row(self) -> QHBoxLayout:
         """Build the provider combo + add/remove buttons row."""
-        btn_style = (
+        btn_style = maybe_host_stylesheet(
             "QPushButton { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "
             "border-radius: 4px; font-size: 13px; font-weight: bold; }"
             "QPushButton:hover { background: #3c3c3c; }"
@@ -339,15 +350,17 @@ class SettingsDialog(QDialog):
         self._fetch_btn = QPushButton("Refresh")
         self._fetch_btn.setFixedWidth(70)
         self._fetch_btn.setStyleSheet(
-            "QPushButton { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "
-            "border-radius: 4px; padding: 4px; font-size: 11px; }"
-            "QPushButton:hover { background: #3c3c3c; }"
+            maybe_host_stylesheet(
+                "QPushButton { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "
+                "border-radius: 4px; padding: 4px; font-size: 11px; }"
+                "QPushButton:hover { background: #3c3c3c; }"
+            )
         )
         self._fetch_btn.clicked.connect(self._fetch_models)
         model_layout.addWidget(self._fetch_btn)
 
         self._model_status = QLabel()
-        self._model_status.setStyleSheet("color: #808080; font-size: 10px;")
+        self._model_status.setStyleSheet(maybe_host_stylesheet("color: #808080; font-size: 10px;"))
         self._model_status.setWordWrap(True)
         model_layout.addWidget(self._model_status)
         return model_layout
@@ -565,10 +578,9 @@ class SettingsDialog(QDialog):
 
     # --- Auth status ---
 
-    _OK_STYLE = "color: #4ec9b0; font-size: 11px; font-weight: bold;"
-    _ERR_STYLE = "color: #f44747; font-size: 11px;"
-
-    _HINT_STYLE = "color: #808080; font-size: 10px;"
+    _OK_STYLE = maybe_host_stylesheet("color: #4ec9b0; font-size: 11px; font-weight: bold;")
+    _ERR_STYLE = maybe_host_stylesheet("color: #f44747; font-size: 11px;")
+    _HINT_STYLE = maybe_host_stylesheet("color: #808080; font-size: 10px;")
 
     def _update_auth_status(self) -> None:
         provider_name = self._provider_combo.currentText()
@@ -640,10 +652,10 @@ class SettingsDialog(QDialog):
 
         if models:
             self._model_status.setText(f"{len(models)} models")
-            self._model_status.setStyleSheet("color: #4ec9b0; font-size: 10px;")
+            self._model_status.setStyleSheet(maybe_host_stylesheet("color: #4ec9b0; font-size: 10px;"))
         else:
             self._model_status.setText("Type model name manually")
-            self._model_status.setStyleSheet("color: #808080; font-size: 10px;")
+            self._model_status.setStyleSheet(maybe_host_stylesheet("color: #808080; font-size: 10px;"))
 
         # Auto-fill generation defaults based on selected model
         self._update_generation_defaults()
@@ -651,7 +663,7 @@ class SettingsDialog(QDialog):
     def _on_fetch_error(self, error: str) -> None:
         self._fetch_btn.setEnabled(True)
         self._model_status.setText(error)
-        self._model_status.setStyleSheet("color: #f44747; font-size: 10px;")
+        self._model_status.setStyleSheet(maybe_host_stylesheet("color: #f44747; font-size: 10px;"))
         self._model_restore_hint = ""
 
     def _update_generation_defaults(self) -> None:

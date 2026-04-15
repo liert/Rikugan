@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import os
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from tests.mocks.ida_mock import install_ida_mocks
@@ -82,6 +83,27 @@ class TestProviderRegistry(unittest.TestCase):
         reg = ProviderRegistry()
         with self.assertRaises(ProviderError):
             reg.create("nonexistent")
+
+    def test_dependency_warnings_returns_list(self):
+        reg = ProviderRegistry()
+        warnings = reg.dependency_warnings()
+        self.assertIsInstance(warnings, list)
+
+    def test_custom_provider_create_sets_provider_name(self):
+        reg = ProviderRegistry()
+        reg.register_custom_providers(["custom-endpoint"])
+
+        class FakeProvider:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                self.api_key = kwargs.get("api_key", "")
+                self.api_base = kwargs.get("api_base", "")
+                self.model = kwargs.get("model", "")
+
+        with patch.object(reg, "_resolve_provider_class", return_value=FakeProvider):
+            provider = reg.create("custom-endpoint", api_key="k", api_base="b", model="m")
+
+        self.assertEqual(provider.kwargs["provider_name"], "custom-endpoint")
 
 
 if __name__ == "__main__":

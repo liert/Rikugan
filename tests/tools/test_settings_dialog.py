@@ -22,6 +22,7 @@ for _mod_name in [
     "rikugan.providers.auth_cache",
     "rikugan.providers.ollama_provider",
     "rikugan.providers.registry",
+    "rikugan.ui.styles",
 ]:
     _stub = types.ModuleType(_mod_name)
     for _attr in [
@@ -29,14 +30,25 @@ for _mod_name in [
         "log_debug",
         "log_error",
         "log_info",
+        "log_warning",
         "ModelInfo",
+        "Role",
         "resolve_anthropic_auth",
         "resolve_auth_cached",
         "DEFAULT_OLLAMA_URL",
         "ProviderRegistry",
+        "DARK_THEME",
+        "build_theme_stylesheet",
+        "maybe_host_stylesheet",
     ]:
         setattr(_stub, _attr, MagicMock())
     sys.modules[_mod_name] = _stub
+
+_styles_mod = sys.modules.get("rikugan.ui.styles")
+if _styles_mod is not None:
+    _styles_mod.maybe_host_stylesheet = lambda css: css
+    _styles_mod.build_theme_stylesheet = lambda: ""
+    _styles_mod.DARK_THEME = ""
 
 # Ensure DEFAULT_OLLAMA_URL is a string on the stub (real module already has it)
 _ollama_mod = sys.modules.get("rikugan.providers.ollama_provider")

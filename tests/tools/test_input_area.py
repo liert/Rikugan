@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from tests.qt_stubs import ensure_pyside6_stubs
 ensure_pyside6_stubs()
+
+sys.modules.pop("rikugan.ui.input_area", None)
 
 from rikugan.ui.input_area import InputArea, _SkillPopup  # noqa: E402
 
@@ -93,6 +96,9 @@ def _make_input() -> InputArea:
     area._popup = None
     area._submit_callback = None
     area._cancel_callback = None
+    area._applying_theme = False
+    area._theme_css = ""
+    area.setStyleSheet = MagicMock()
     return area
 
 
@@ -168,6 +174,27 @@ class TestInputAreaCheckAutocomplete(unittest.TestCase):
         area.toPlainText = MagicMock(return_value="/xyz")
         area._check_autocomplete()
         area._dismiss_popup.assert_called_once()
+
+
+class TestInputAreaApplyTheme(unittest.TestCase):
+    def test_apply_theme_sets_stylesheet_and_caches_css(self):
+        area = _make_input()
+        css = "QPlainTextEdit#input_area { background-color: #222222; color: #eeeeee; }"
+        with patch("rikugan.ui.input_area.use_native_host_theme", return_value=True):
+            with patch("rikugan.ui.input_area.build_input_area_stylesheet", return_value=css):
+                area._apply_theme()
+        area.setStyleSheet.assert_called_once()
+        self.assertEqual(area._theme_css, css)
+        self.assertFalse(area._applying_theme)
+
+    def test_apply_theme_skips_when_css_is_unchanged(self):
+        area = _make_input()
+        expected_css = "QPlainTextEdit#input_area { background-color: #222222; color: #eeeeee; }"
+        area._theme_css = expected_css
+        with patch("rikugan.ui.input_area.use_native_host_theme", return_value=True):
+            with patch("rikugan.ui.input_area.build_input_area_stylesheet", return_value=expected_css):
+                area._apply_theme()
+        area.setStyleSheet.assert_not_called()
 
 
 if __name__ == "__main__":

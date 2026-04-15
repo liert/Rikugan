@@ -84,6 +84,7 @@ _GUI_NAMES = [
     "QColor",
     "QFont",
     "QIntValidator",
+    "QPalette",
     "QSyntaxHighlighter",
     "QTextCharFormat",
 ]
@@ -111,6 +112,7 @@ def ensure_pyside6_stubs() -> None:
         _stub_mod(
             "PySide6.QtCore",
             Signal=_Signal,
+            QEvent=_qt_class("QEvent"),
             Qt=_sentinel,
             QObject=_qt_class("QObject"),
             QTimer=_qt_class("QTimer"),

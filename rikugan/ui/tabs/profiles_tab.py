@@ -31,17 +31,18 @@ from ..qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from ..styles import maybe_host_stylesheet
 
 if TYPE_CHECKING:
     from ..settings_service import SettingsService
 
-_BTN_STYLE = (
+_BTN_STYLE = maybe_host_stylesheet(
     "QPushButton { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "
     "border-radius: 4px; padding: 4px 12px; font-size: 11px; }"
     "QPushButton:hover { background: #3c3c3c; }"
 )
 
-_GROUP_STYLE = (
+_GROUP_STYLE = maybe_host_stylesheet(
     "QGroupBox { font-weight: bold; border: 1px solid #3c3c3c; "
     "border-radius: 4px; margin-top: 14px; padding-top: 4px; }"
     "QGroupBox::title { subcontrol-origin: margin; left: 10px; "
@@ -268,11 +269,11 @@ class ProfilesTab(QWidget):
             for cat_name, tool_names in categories:
                 col = cols[col_idx % n_cols]
                 header = QLabel(f"<b>{cat_name}</b>")
-                header.setStyleSheet("font-size: 10px; color: #888; margin-top: 6px;")
+                header.setStyleSheet(maybe_host_stylesheet("font-size: 10px; color: #888; margin-top: 6px;"))
                 col.addWidget(header)
                 for tname in tool_names:
                     cb = QCheckBox(tname)
-                    cb.setStyleSheet("font-size: 11px;")
+                    cb.setStyleSheet(maybe_host_stylesheet("font-size: 11px;"))
                     self._denied_tool_cbs[tname] = cb
                     col.addWidget(cb)
                 col_idx += 1
@@ -559,7 +560,7 @@ class ProfilesTab(QWidget):
         lay.addLayout(form)
 
         error_label = QLabel()
-        error_label.setStyleSheet("color: #f44747; font-size: 11px;")
+        error_label.setStyleSheet(maybe_host_stylesheet("color: #f44747; font-size: 11px;"))
         error_label.hide()
         lay.addWidget(error_label)
 

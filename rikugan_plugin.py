@@ -144,9 +144,17 @@ def _log(msg: str) -> None:
     """Best-effort log to IDA output and debug file."""
     idaapi.msg(f"[Rikugan] {msg}\n")
     try:
-        importlib.import_module("rikugan.core.logging").log_trace(msg)
-    except Exception as e:
-        import sys; sys.stderr.write(f"[Rikugan] log_trace unavailable during bootstrap: {e}\n")
+        logging_mod = importlib.import_module("rikugan.core.logging")
+        trace = getattr(logging_mod, "log_trace", None)
+        if callable(trace):
+            trace(msg)
+            return
+        debug = getattr(logging_mod, "log_debug", None)
+        if callable(debug):
+            debug(msg)
+    except Exception:
+        # Early bootstrap can observe partially initialized modules; ignore.
+        pass
 
 
 def PLUGIN_ENTRY():  # noqa: N802

@@ -17,6 +17,9 @@ install_ida_mocks()
 from rikugan.core.external_sources import (
     get_claude_code_base,
     get_codex_base,
+    get_claude_skills_dir,
+    get_codex_skills_dir,
+    get_external_skills_title,
     discover_claude_skills,
     discover_codex_skills,
     discover_all_external_skills,
@@ -33,6 +36,9 @@ class TestPathResolution(unittest.TestCase):
     def test_claude_code_base(self):
         base = get_claude_code_base()
         self.assertEqual(base, Path.home() / ".claude")
+
+    def test_claude_skills_dir(self):
+        self.assertEqual(get_claude_skills_dir(), get_claude_code_base() / "skills")
 
     def test_codex_base_default(self):
         """Default codex base is ~/.codex."""
@@ -56,6 +62,27 @@ class TestPathResolution(unittest.TestCase):
         with patch.dict(os.environ, {"CODEX_HOME": ""}):
             base = get_codex_base()
             self.assertEqual(base, Path.home() / ".codex")
+
+    def test_codex_skills_dir(self):
+        with patch.dict(os.environ, {}, clear=False):
+            env = os.environ.copy()
+            env.pop("CODEX_HOME", None)
+            with patch.dict(os.environ, env, clear=True):
+                self.assertEqual(get_codex_skills_dir(), get_codex_base() / "skills")
+
+    def test_external_skills_title_claude(self):
+        with patch("rikugan.core.external_sources.get_claude_skills_dir", return_value=Path(r"C:\Users\Pyra\.claude\skills")):
+            self.assertEqual(
+                get_external_skills_title("claude"),
+                r"Claude Code Skills (C:\Users\Pyra\.claude\skills)",
+            )
+
+    def test_external_skills_title_codex(self):
+        with patch("rikugan.core.external_sources.get_codex_skills_dir", return_value=Path(r"C:\Users\Pyra\.codex\skills")):
+            self.assertEqual(
+                get_external_skills_title("codex"),
+                r"Codex Skills (C:\Users\Pyra\.codex\skills)",
+            )
 
 
 class TestManagedPaths(unittest.TestCase):

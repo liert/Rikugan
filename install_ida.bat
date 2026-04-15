@@ -145,8 +145,8 @@ set "PIP_CMD=pip"
 call :try_install_requirements
 if !errorlevel! equ 0 goto deps_ok
 
-echo [-] Failed to install Python dependencies from requirements.txt
-exit /b 1
+echo [!] Could not install one or more Python dependencies.
+echo [!] Rikugan will still be installed, but features tied to missing packages will show warnings in the plugin.
 
 :deps_ok
 

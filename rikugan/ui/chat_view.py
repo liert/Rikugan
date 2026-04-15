@@ -104,16 +104,16 @@ class ChatView(QScrollArea):
         self._user_answer_callback = callback
 
     def add_user_message(self, text: str) -> None:
-        widget = UserMessageWidget(text)
+        widget = UserMessageWidget(text, parent=self._container)
         self._insert_widget(widget)
         self._current_assistant = None
 
     def add_error_message(self, text: str) -> None:
-        self._insert_widget(ErrorMessageWidget(text))
+        self._insert_widget(ErrorMessageWidget(text, parent=self._container))
         self._scroll_to_bottom()
 
     def add_queued_message(self, text: str) -> None:
-        self._insert_widget(QueuedMessageWidget(text))
+        self._insert_widget(QueuedMessageWidget(text, parent=self._container))
         self._scroll_to_bottom()
 
     def remove_queued_messages(self) -> None:
@@ -138,7 +138,7 @@ class ChatView(QScrollArea):
     def _show_thinking(self) -> None:
         if self._thinking is not None:
             return
-        self._thinking = ThinkingWidget()
+        self._thinking = ThinkingWidget(parent=self._container)
         self._thinking_shown_at = time.monotonic()
         self._insert_widget(self._thinking)
         self._scroll_to_bottom()
@@ -251,7 +251,7 @@ class ChatView(QScrollArea):
         elif etype == TurnEventType.ERROR:
             self._hide_thinking()
             self._reset_tool_run()
-            self._insert_widget(ErrorMessageWidget(event.error or "Unknown error"))
+            self._insert_widget(ErrorMessageWidget(event.error or "Unknown error", parent=self._container))
             self._scroll_to_bottom()
 
     def _handle_text_event(self, event: TurnEvent) -> None:
@@ -259,7 +259,7 @@ class ChatView(QScrollArea):
         self._reset_tool_run()
         if event.type == TurnEventType.TEXT_DELTA:
             if self._current_assistant is None:
-                self._current_assistant = AssistantMessageWidget()
+                self._current_assistant = AssistantMessageWidget(parent=self._container)
                 self._insert_widget(self._current_assistant)
             self._current_assistant.append_text(event.text)
             self._scroll_to_bottom()
@@ -272,7 +272,7 @@ class ChatView(QScrollArea):
         etype = event.type
         if etype == TurnEventType.TOOL_CALL_START:
             self._hide_thinking()
-            tw = ToolCallWidget(event.tool_name, event.tool_call_id)
+            tw = ToolCallWidget(event.tool_name, event.tool_call_id, parent=self._container)
             self._tool_widgets[event.tool_call_id] = tw
             self._register_tool_widget(event.tool_name, event.tool_call_id, tw)
             self._scroll_to_bottom()
@@ -301,6 +301,7 @@ class ChatView(QScrollArea):
                 event.tool_name,
                 event.tool_args,
                 event.text,
+                parent=self._container,
             )
             widget.set_approved_callback(self._on_tool_approval)
             self._insert_widget(widget)
@@ -321,7 +322,7 @@ class ChatView(QScrollArea):
         elif etype == TurnEventType.CANCELLED:
             self._hide_thinking()
             self._reset_tool_run()
-            self._insert_widget(ErrorMessageWidget("Cancelled by user"))
+            self._insert_widget(ErrorMessageWidget("Cancelled by user", parent=self._container))
             self._scroll_to_bottom()
 
     def _handle_plan_event(self, event: TurnEvent) -> None:
@@ -329,7 +330,7 @@ class ChatView(QScrollArea):
         if etype == TurnEventType.PLAN_GENERATED:
             self._hide_thinking()
             self._reset_tool_run()
-            self._plan_view = PlanView()
+            self._plan_view = PlanView(parent=self._container)
             if event.plan_steps:
                 self._plan_view.set_plan(event.plan_steps)
 
@@ -365,6 +366,7 @@ class ChatView(QScrollArea):
                     meta.get("from_phase", ""),
                     meta.get("to_phase", ""),
                     event.text,
+                    parent=self._container,
                 )
             )
         else:  # EXPLORATION_FINDING
@@ -374,6 +376,7 @@ class ChatView(QScrollArea):
                     event.text,
                     meta.get("address"),
                     meta.get("relevance", "medium"),
+                    parent=self._container,
                 )
             )
         self._scroll_to_bottom()
@@ -390,6 +393,7 @@ class ChatView(QScrollArea):
                     path=meta.get("path", ""),
                     preview=meta.get("preview", ""),
                     review_passed=meta.get("review_passed", True),
+                    parent=self._container,
                 )
             )
             self._scroll_to_bottom()
@@ -400,17 +404,17 @@ class ChatView(QScrollArea):
         if event.type == TurnEventType.SUBAGENT_SPAWNED:
             name = event.text
             agent_type = meta.get("agent_type", "custom")
-            self._insert_widget(SubagentEventWidget("spawned", name, f"type: {agent_type}"))
+            self._insert_widget(SubagentEventWidget("spawned", name, f"type: {agent_type}", parent=self._container))
         elif event.type == TurnEventType.SUBAGENT_COMPLETED:
             name = meta.get("name", "")
             turns = meta.get("turn_count", 0)
             elapsed = meta.get("elapsed", 0.0)
             detail = f"{turns} turns, {elapsed:.0f}s"
-            self._insert_widget(SubagentEventWidget("completed", name, detail))
+            self._insert_widget(SubagentEventWidget("completed", name, detail, parent=self._container))
         elif event.type == TurnEventType.SUBAGENT_FAILED:
             name = meta.get("name", "")
             error = event.error or "Unknown error"
-            self._insert_widget(SubagentEventWidget("failed", name, error))
+            self._insert_widget(SubagentEventWidget("failed", name, error, parent=self._container))
         self._scroll_to_bottom()
 
     def _handle_question_event(self, event: TurnEvent) -> None:
@@ -420,7 +424,7 @@ class ChatView(QScrollArea):
             options = ["Save All", "Discard All"]
         else:  # USER_QUESTION
             options = event.metadata.get("options", [])
-        widget = UserQuestionWidget(event.text, options)
+        widget = UserQuestionWidget(event.text, options, parent=self._container)
         widget.set_option_selected_callback(self._on_user_answer)
         self._insert_widget(widget)
         self._scroll_to_bottom()
@@ -449,12 +453,12 @@ class ChatView(QScrollArea):
             elif msg.role == Role.ASSISTANT:
                 self._reset_tool_run()
                 if msg.content:
-                    w = AssistantMessageWidget()
+                    w = AssistantMessageWidget(parent=self._container)
                     w.set_text(msg.content)
                     self._insert_widget(w)
 
                 for tc in msg.tool_calls:
-                    tw = ToolCallWidget(tc.name, tc.id)
+                    tw = ToolCallWidget(tc.name, tc.id, parent=self._container)
                     try:
                         args_str = json.dumps(tc.arguments, indent=2)
                     except (TypeError, ValueError):

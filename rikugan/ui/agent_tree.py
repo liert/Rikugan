@@ -19,6 +19,7 @@ from .qt_compat import (
     Signal,
     qt_flags,
 )
+from .styles import maybe_host_stylesheet
 
 _STATUS_COLORS: dict[str, str] = {
     "PENDING": "#808080",
@@ -34,6 +35,7 @@ _BTN_STYLE = (
     "QPushButton:hover { background: #3c3c3c; }"
     "QPushButton:disabled { color: #555; }"
 )
+_BTN_STYLE = maybe_host_stylesheet(_BTN_STYLE)
 
 _TREE_STYLE = """
     QTreeWidget {
@@ -61,6 +63,18 @@ _TREE_STYLE = """
         font-size: 10px;
     }
 """
+_TREE_STYLE = maybe_host_stylesheet(_TREE_STYLE)
+
+_COMBO_STYLE = maybe_host_stylesheet(
+    "QComboBox { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "
+    "border-radius: 4px; padding: 3px 6px; font-size: 11px; }"
+)
+
+_STATUS_LABEL_STYLE = maybe_host_stylesheet("color: #808080; font-size: 11px;")
+
+_PREVIEW_STYLE = maybe_host_stylesheet(
+    "QTextEdit { background: #252525; color: #d4d4d4; border: 1px solid #3c3c3c; font-size: 11px; padding: 4px; }"
+)
 
 
 @dataclass
@@ -108,10 +122,7 @@ class AgentTreeWidget(QWidget):
 
         self._filter_combo = QComboBox()
         self._filter_combo.setFixedWidth(130)
-        self._filter_combo.setStyleSheet(
-            "QComboBox { background: #2d2d2d; color: #d4d4d4; border: 1px solid #3c3c3c; "
-            "border-radius: 4px; padding: 3px 6px; font-size: 11px; }"
-        )
+        self._filter_combo.setStyleSheet(_COMBO_STYLE)
         self._filter_combo.addItems(["All Agents", "General", "Bulk Rename"])
         self._filter_combo.currentTextChanged.connect(self._apply_filter)
         toolbar.addWidget(self._filter_combo)
@@ -119,7 +130,7 @@ class AgentTreeWidget(QWidget):
         toolbar.addStretch()
 
         self._status_label = QLabel("0 running / 0 completed")
-        self._status_label.setStyleSheet("color: #808080; font-size: 11px;")
+        self._status_label.setStyleSheet(_STATUS_LABEL_STYLE)
         toolbar.addWidget(self._status_label)
 
         main_layout.addLayout(toolbar)
@@ -147,10 +158,7 @@ class AgentTreeWidget(QWidget):
         self._preview.setObjectName("agent_preview")
         self._preview.setReadOnly(True)
         self._preview.setFixedHeight(80)
-        self._preview.setStyleSheet(
-            "QTextEdit { background: #252525; color: #d4d4d4; border: 1px solid #3c3c3c; "
-            "font-size: 11px; padding: 4px; }"
-        )
+        self._preview.setStyleSheet(_PREVIEW_STYLE)
         self._preview.setPlaceholderText("Select an agent to preview its output...")
         main_layout.addWidget(self._preview)
 

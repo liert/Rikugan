@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .qt_compat import (
+    QEvent,
     QFrame,
     QLabel,
     QPlainTextEdit,
@@ -11,6 +12,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import build_input_area_stylesheet, host_stylesheet, use_native_host_theme
 
 
 class _SkillPopup(QFrame):
@@ -28,10 +30,13 @@ class _SkillPopup(QFrame):
         self.setObjectName("skill_popup")
         self.setWindowFlags(Qt.WindowType.ToolTip)
         self.setStyleSheet(
-            "QFrame#skill_popup { background: #2d2d2d; border: 1px solid #555; "
-            "border-radius: 4px; padding: 2px; }"
-            "QLabel { color: #d4d4d4; padding: 3px 8px; }"
-            'QLabel[selected="true"] { background: #094771; border-radius: 3px; }'
+            host_stylesheet(
+                "QFrame#skill_popup { background: #2d2d2d; border: 1px solid #555; "
+                "border-radius: 4px; padding: 2px; }"
+                "QLabel { color: #d4d4d4; padding: 3px 8px; }"
+                'QLabel[selected="true"] { background: #094771; border-radius: 3px; }',
+                'QLabel[selected="true"] { font-weight: bold; }',
+            )
         )
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(2, 2, 2, 2)
@@ -106,6 +111,9 @@ class InputArea(QPlainTextEdit):
         self._popup: _SkillPopup | None = None
         self._submit_callback = None  # Callable[[str], None]
         self._cancel_callback = None  # Callable[[], None]
+        self._applying_theme = False
+        self._theme_css = ""
+        self._apply_theme()
 
     def set_submit_callback(self, callback) -> None:
         """Set the callback for submit (Enter key). Callback signature: (str) -> None."""
@@ -168,6 +176,35 @@ class InputArea(QPlainTextEdit):
             self.setPlaceholderText("Ask about this binary... (/ for skills, /modify to patch)")
         else:
             self.setPlaceholderText("Rikugan is thinking...")
+
+    def _apply_theme(self) -> None:
+        """Apply host-aware styling to the text editor."""
+        if not use_native_host_theme() or self._applying_theme:
+            return
+        css = build_input_area_stylesheet(self)
+        if css == self._theme_css:
+            return
+        self._applying_theme = True
+        try:
+            self.setStyleSheet(css)
+            self._theme_css = css
+        finally:
+            self._applying_theme = False
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._apply_theme()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if not use_native_host_theme():
+            return
+        event_type = getattr(event, "type", lambda: None)()
+        palette_change = getattr(QEvent, "PaletteChange", None)
+        app_palette_change = getattr(QEvent, "ApplicationPaletteChange", None)
+        parent_change = getattr(QEvent, "ParentChange", None)
+        if event_type in {palette_change, app_palette_change, parent_change}:
+            self._apply_theme()
 
     # ------------------------------------------------------------------
     # Autocomplete

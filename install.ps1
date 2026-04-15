@@ -33,10 +33,33 @@ function Write-Ok      { param($Msg) Write-Host "[+] $Msg" -ForegroundColor Gree
 function Write-Warn    { param($Msg) Write-Host "[!] $Msg" -ForegroundColor Yellow }
 function Write-Err     { param($Msg) Write-Host "[-] $Msg" -ForegroundColor Red }
 
+function Test-UnicodeBannerSupport {
+    try {
+        $consoleEncoding = [Console]::OutputEncoding
+        $outputEncoding = $OutputEncoding
+
+        $isUtf8Console = $consoleEncoding -and $consoleEncoding.WebName -eq "utf-8"
+        $isUtf8Output = $outputEncoding -and $outputEncoding.WebName -eq "utf-8"
+        $hasModernTerminal = [bool]$env:WT_SESSION -or [bool]$env:TERM_PROGRAM
+
+        return $isUtf8Console -and $isUtf8Output -and $hasModernTerminal
+    }
+    catch {
+        return $false
+    }
+}
+
 function Show-Banner {
+    $titleLine = if (Test-UnicodeBannerSupport) {
+        "    |            六眼  Rikugan                 |"
+    }
+    else {
+        "    |              Rikugan                     |"
+    }
+
     Write-Host ""
     Write-Host "    +==========================================+" -ForegroundColor White
-    Write-Host "    |            六眼  Rikugan                 |" -ForegroundColor White
+    Write-Host $titleLine -ForegroundColor White
     Write-Host "    |     Reverse Engineering AI Agent         |" -ForegroundColor White
     Write-Host "    |        IDA Pro  .  Binary Ninja          |" -ForegroundColor White
     Write-Host "    +==========================================+" -ForegroundColor White

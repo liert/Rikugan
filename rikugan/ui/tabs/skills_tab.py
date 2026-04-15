@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ...core.config import RikuganConfig
+from ...core.external_sources import get_external_skills_title
 from ...core.logging import log_debug
 from ...skills.loader import SkillDefinition
 from ..qt_compat import (
@@ -73,14 +74,7 @@ class SkillsTab(QWidget):
 
     def _build_external_group(self, source_key: str, skills: list[SkillDefinition]) -> QGroupBox:
         """Build a group box for external skills from one source."""
-        if source_key == "claude":
-            title = "Claude Code Skills (~/.claude/skills/)"
-        elif source_key == "codex":
-            title = "Codex Skills (~/.codex/skills/)"
-        else:
-            title = f"{source_key} Skills"
-
-        group = QGroupBox(title)
+        group = QGroupBox(get_external_skills_title(source_key))
         layout = QVBoxLayout(group)
 
         if not skills:

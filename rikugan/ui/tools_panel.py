@@ -13,6 +13,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import maybe_host_stylesheet
 
 _HEADER_STYLE = "color: #d4d4d4; font-weight: bold; font-size: 12px;"
 
@@ -58,7 +59,7 @@ class ToolsPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("tools_panel")
         self.setWindowTitle("Rikugan Tools")
-        self.setStyleSheet(_PANEL_STYLE)
+        self.setStyleSheet(maybe_host_stylesheet(_PANEL_STYLE))
         # No minimum size — this widget is embedded in IDA dockable forms
         # and Binary Ninja sidebars, which can be any size.
 
@@ -73,7 +74,7 @@ class ToolsPanel(QWidget):
         header_layout.setContentsMargins(12, 8, 12, 8)
 
         title = QLabel("Tools")
-        title.setStyleSheet(_HEADER_STYLE)
+        title.setStyleSheet(maybe_host_stylesheet(_HEADER_STYLE))
         header_layout.addWidget(title)
         header_layout.addStretch()
 
@@ -85,12 +86,12 @@ class ToolsPanel(QWidget):
 
         # Placeholder tabs
         self._renamer_placeholder = QLabel("Not loaded")
-        self._renamer_placeholder.setStyleSheet("color: #808080; padding: 20px;")
+        self._renamer_placeholder.setStyleSheet(maybe_host_stylesheet("color: #808080; padding: 20px;"))
         self._renamer_placeholder.setWordWrap(True)
         self._tabs.addTab(self._renamer_placeholder, "Renamer")
 
         self._agents_placeholder = QLabel("Not loaded")
-        self._agents_placeholder.setStyleSheet("color: #808080; padding: 20px;")
+        self._agents_placeholder.setStyleSheet(maybe_host_stylesheet("color: #808080; padding: 20px;"))
         self._agents_placeholder.setWordWrap(True)
         self._tabs.addTab(self._agents_placeholder, "Agents")
 

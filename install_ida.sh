@@ -428,8 +428,8 @@ install_requirements() {
 }
 
 if ! install_requirements; then
-    err "Failed to install Python dependencies from requirements.txt"
-    exit 1
+    warn "Could not install one or more Python dependencies."
+    warn "Rikugan will still be installed, but features tied to missing packages will show warnings in the plugin."
 fi
 
 # ── Create directories ────────────────────────────────────────────────

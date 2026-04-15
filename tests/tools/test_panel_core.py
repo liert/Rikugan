@@ -30,9 +30,10 @@ for _mod_name in [
     if _mod_name not in sys.modules:
         _stub = types.ModuleType(_mod_name)
         for _attr in [
-            "DARK_THEME", "ChatView", "InputArea", "ContextBar",
+            "DARK_THEME", "build_theme_stylesheet", "maybe_host_stylesheet", "use_native_host_theme",
+            "ChatView", "InputArea", "ContextBar",
             "_SharedSpinnerTimer", "RikuganConfig",
-            "log_error", "log_info", "log_debug",
+            "log_error", "log_info", "log_debug", "log_warning",
             "TurnEvent", "TurnEventType", "MutationRecord",
             "Role", "ModelInfo",
             "resolve_auth_cached", "resolve_anthropic_auth",

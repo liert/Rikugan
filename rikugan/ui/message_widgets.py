@@ -20,6 +20,7 @@ from .qt_compat import (
     QWidget,
     qt_flags,
 )
+from .styles import host_stylesheet
 
 _THINKING_PHRASES = [
     "analyzing binary structure...",
@@ -39,6 +40,84 @@ _THINKING_PHRASES = [
     "examining vtable references...",
     "decoding encoded values...",
 ]
+
+
+_USER_ROLE = "#4ec9b0"
+_ASSISTANT_ROLE = "#569cd6"
+_BODY_TEXT = "#d4d4d4"
+_MUTED_TEXT = "#808080"
+_SUBTLE_TEXT = "#b0b0b0"
+_USER_BUBBLE_BG = "#0e639c"
+_USER_BUBBLE_BORDER = "#1177bb"
+_ASSISTANT_BUBBLE_BG = "#151515"
+_ASSISTANT_BUBBLE_BORDER = "#2c2c2c"
+_THINKING_SURFACE_BG = "#1e1e1e"
+_THINKING_BLOCK_BG = "#1a1a2e"
+_THINKING_BLOCK_BORDER = "#2a2a3e"
+_TOOL_BG = "#252526"
+_TOOL_BORDER = "#3c3c3c"
+
+
+def _frame_css(*, background: str, border: str | None = None, radius: int = 8) -> str:
+    border_css = f"border: 1px solid {border}; " if border else "border: none; "
+    return f"background-color: {background}; {border_css}border-radius: {radius}px;"
+
+
+def _bubble_css(
+    *,
+    background: str,
+    text_color: str,
+    border: str | None = None,
+    radius: int = 10,
+    padding: str = "8px 12px",
+    size: int = 13,
+) -> str:
+    border_css = f"border: 1px solid {border}; " if border else "border: none; "
+    return (
+        f"background-color: {background}; color: {text_color}; "
+        f"{border_css}border-radius: {radius}px; "
+        f"padding: {padding}; font-size: {size}px;"
+    )
+
+
+def _native_text_style(
+    *,
+    size: int | None = None,
+    bold: bool = False,
+    italic: bool = False,
+    monospace: bool = False,
+) -> str:
+    parts: list[str] = []
+    if size is not None:
+        parts.append(f"font-size: {size}px;")
+    if bold:
+        parts.append("font-weight: bold;")
+    if italic:
+        parts.append("font-style: italic;")
+    if monospace:
+        parts.append('font-family: Consolas, "Courier New", monospace;')
+    return " ".join(parts)
+
+
+def _muted_text(colors=None) -> str:
+    return _MUTED_TEXT
+
+
+def _subtle_text(colors=None) -> str:
+    return _SUBTLE_TEXT
+
+
+def _tool_frame_style(
+    source=None,
+    accent: str | None = None,
+    background: str | None = None,
+    object_name: str = "message_tool",
+) -> str:
+    del source
+    border = accent or _TOOL_BORDER
+    bg = background or _TOOL_BG
+    return f"QFrame#{object_name} {{ {_frame_css(background=bg, border=border, radius=6)} }}"
+
 
 # Re-export tool widgets so existing consumers that import from this module
 # continue to work without changes.
@@ -110,7 +189,12 @@ class UserMessageWidget(QFrame):
         layout.setContentsMargins(8, 6, 8, 6)
 
         self._role_label = QLabel("You")
-        self._role_label.setStyleSheet("color: #4ec9b0; font-weight: bold; font-size: 11px;")
+        self._role_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_USER_ROLE}; font-weight: bold; font-size: 11px;",
+                f"color: {_USER_ROLE}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._role_label)
 
         self._content = QLabel(text)
@@ -121,7 +205,17 @@ class UserMessageWidget(QFrame):
                 Qt.TextInteractionFlag.TextSelectableByKeyboard,
             )
         )
-        self._content.setStyleSheet("color: #d4d4d4; font-size: 13px;")
+        self._content.setStyleSheet(
+            host_stylesheet(
+                f"background-color: {_USER_BUBBLE_BG}; color: #ffffff; "
+                "border-radius: 10px; padding: 8px 12px; font-size: 13px;",
+                _bubble_css(
+                    background=_USER_BUBBLE_BG,
+                    text_color="#ffffff",
+                    border=_USER_BUBBLE_BORDER,
+                ),
+            )
+        )
         self._content.setMinimumWidth(0)
         self._content.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._content)
@@ -175,7 +269,14 @@ class _ThinkingBlock(QFrame):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("thinking_block")
-        self.setStyleSheet("#thinking_block { background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 6px; }")
+        self.setStyleSheet(
+            _tool_frame_style(
+                source=parent or self,
+                accent=_THINKING_BLOCK_BORDER,
+                background=_THINKING_BLOCK_BG,
+                object_name="thinking_block",
+            )
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
@@ -192,7 +293,12 @@ class _ThinkingBlock(QFrame):
         header.setSpacing(4)
         header.addWidget(self._toggle)
         self._header_label = QLabel("Thinking")
-        self._header_label.setStyleSheet("color: #707090; font-size: 11px; font-style: italic;")
+        self._header_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_MUTED_TEXT}; font-size: 11px; font-style: italic;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11, italic=True)}",
+            )
+        )
         header.addWidget(self._header_label, 1)
         layout.addLayout(header)
 
@@ -205,7 +311,12 @@ class _ThinkingBlock(QFrame):
                 Qt.TextInteractionFlag.TextSelectableByKeyboard,
             )
         )
-        self._content.setStyleSheet("color: #606078; font-size: 12px;")
+        self._content.setStyleSheet(
+            host_stylesheet(
+                "color: #606078; font-size: 12px;",
+                f"color: #606078; {_native_text_style(size=12, italic=True)}",
+            )
+        )
         self._content.hide()
         layout.addWidget(self._content)
 
@@ -218,7 +329,7 @@ class _ThinkingBlock(QFrame):
         self._toggle.setText("\u25bc" if self._expanded else "\u25b6")
 
     def set_thinking(self, text: str, in_progress: bool = False) -> None:
-        self._content.setText(md_to_html(text))
+        self._content.setText(md_to_html(text, self))
         label = "Thinking\u2026" if in_progress else "Thinking"
         self._header_label.setText(label)
         self.show()
@@ -245,7 +356,12 @@ class AssistantMessageWidget(QFrame):
         layout.setContentsMargins(8, 6, 8, 6)
 
         self._role_label = QLabel("Rikugan")
-        self._role_label.setStyleSheet("color: #569cd6; font-weight: bold; font-size: 11px;")
+        self._role_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_ASSISTANT_ROLE}; font-weight: bold; font-size: 11px;",
+                f"color: {_ASSISTANT_ROLE}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._role_label)
 
         self._thinking_block = _ThinkingBlock()
@@ -262,7 +378,17 @@ class AssistantMessageWidget(QFrame):
             )
         )
         self._content.setOpenExternalLinks(True)
-        self._content.setStyleSheet("color: #d4d4d4; font-size: 13px;")
+        self._content.setStyleSheet(
+            host_stylesheet(
+                f"background-color: {_ASSISTANT_BUBBLE_BG}; color: {_BODY_TEXT}; "
+                "border-radius: 10px; padding: 8px 12px; font-size: 13px;",
+                _bubble_css(
+                    background=_ASSISTANT_BUBBLE_BG,
+                    text_color=_BODY_TEXT,
+                    border=_ASSISTANT_BUBBLE_BORDER,
+                ),
+            )
+        )
         # Prevent the label from requesting more width than its parent
         self._content.setMinimumWidth(0)
         self._content.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -275,7 +401,7 @@ class AssistantMessageWidget(QFrame):
             self._thinking_block.set_thinking(thinking, in_progress=in_progress)
         else:
             self._thinking_block.hide()
-        self._content.setText(md_to_html(visible))
+        self._content.setText(md_to_html(visible, self))
         self._pending_delta = 0
 
     def append_text(self, delta: str) -> None:
@@ -305,6 +431,13 @@ class ThinkingWidget(QFrame):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_thinking")
+        self.setStyleSheet(
+            _tool_frame_style(
+                source=parent or self,
+                background=_THINKING_SURFACE_BG,
+                object_name="message_thinking",
+            )
+        )
         self._phrase_idx = random.randint(0, len(_THINKING_PHRASES) - 1)
         self._star_idx = 0
 
@@ -313,12 +446,22 @@ class ThinkingWidget(QFrame):
         layout.setSpacing(6)
 
         self._star_label = QLabel(self._STAR_FRAMES[0])
-        self._star_label.setStyleSheet("color: #dcdcaa; font-size: 14px;")
+        self._star_label.setStyleSheet(
+            host_stylesheet(
+                "color: #dcdcaa; font-size: 14px;",
+                f"color: #dcdcaa; {_native_text_style(size=14)}",
+            )
+        )
         self._star_label.setFixedWidth(18)
         layout.addWidget(self._star_label)
 
         self._phrase_label = QLabel(_THINKING_PHRASES[self._phrase_idx])
-        self._phrase_label.setStyleSheet("color: #808080; font-style: italic; font-size: 12px;")
+        self._phrase_label.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-style: italic; font-size: 12px;",
+                f"color: #808080; {_native_text_style(size=12, italic=True)}",
+            )
+        )
         layout.addWidget(self._phrase_label, 1)
 
         self._stopped = False
@@ -358,7 +501,10 @@ class QueuedMessageWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("message_queued")
         self.setStyleSheet(
-            "QFrame#message_queued { border: 1px dashed #007acc; border-radius: 6px; background: #1e1e2e; }"
+            host_stylesheet(
+                "QFrame#message_queued { border: 1px dashed #007acc; border-radius: 6px; background: #1e1e2e; }",
+                "QFrame#message_queued { border: 1px dashed #007acc; border-radius: 6px; background: #1e1e2e; }",
+            )
         )
 
         layout = QHBoxLayout(self)
@@ -367,7 +513,12 @@ class QueuedMessageWidget(QFrame):
         content_layout = QVBoxLayout()
 
         self._role_label = QLabel("You")
-        self._role_label.setStyleSheet("color: #4ec9b0; font-weight: bold; font-size: 11px;")
+        self._role_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_USER_ROLE}; font-weight: bold; font-size: 11px;",
+                f"color: {_USER_ROLE}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         content_layout.addWidget(self._role_label)
 
         self._content = QLabel(text)
@@ -378,13 +529,23 @@ class QueuedMessageWidget(QFrame):
                 Qt.TextInteractionFlag.TextSelectableByKeyboard,
             )
         )
-        self._content.setStyleSheet("color: #d4d4d4; font-size: 13px;")
+        self._content.setStyleSheet(
+            host_stylesheet(
+                f"color: {_BODY_TEXT}; font-size: 13px;",
+                f"color: {_BODY_TEXT}; {_native_text_style(size=13)}",
+            )
+        )
         content_layout.addWidget(self._content)
 
         layout.addLayout(content_layout, 1)
 
         self._badge = QLabel("[queued]")
-        self._badge.setStyleSheet("color: #808080; font-size: 10px; font-style: italic;")
+        self._badge.setStyleSheet(
+            host_stylesheet(
+                f"color: {_MUTED_TEXT}; font-size: 10px; font-style: italic;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10, italic=True)}",
+            )
+        )
         self._badge.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self._badge)
 
@@ -397,7 +558,12 @@ class UserQuestionWidget(QFrame):
         self._option_selected_callback = None
         self.setObjectName("message_question")
         self.setStyleSheet(
-            "QFrame#message_question { border: 1px solid #dcdcaa; border-radius: 6px; background: #2d2d1e; }"
+            _tool_frame_style(
+                source=parent or self,
+                accent="#dcdcaa",
+                background="#2d2d1e",
+                object_name="message_question",
+            )
         )
 
         layout = QVBoxLayout(self)
@@ -405,7 +571,12 @@ class UserQuestionWidget(QFrame):
         layout.setSpacing(6)
 
         self._header = QLabel("Rikugan asks:")
-        self._header.setStyleSheet("color: #dcdcaa; font-weight: bold; font-size: 11px;")
+        self._header.setStyleSheet(
+            host_stylesheet(
+                "color: #dcdcaa; font-weight: bold; font-size: 11px;",
+                f"color: #dcdcaa; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._header)
 
         self._q_label = QLabel(question)
@@ -416,7 +587,12 @@ class UserQuestionWidget(QFrame):
                 Qt.TextInteractionFlag.TextSelectableByKeyboard,
             )
         )
-        self._q_label.setStyleSheet("color: #d4d4d4; font-size: 13px;")
+        self._q_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_BODY_TEXT}; font-size: 13px;",
+                f"color: {_BODY_TEXT}; {_native_text_style(size=13)}",
+            )
+        )
         layout.addWidget(self._q_label)
 
         if options:
@@ -425,13 +601,14 @@ class UserQuestionWidget(QFrame):
             btn_layout.setSpacing(8)
             for opt in options:
                 btn = QPushButton(opt)
-                btn.setStyleSheet(
+                button_css = (
                     "QPushButton { background: #2d4a6e; color: #9cdcfe; border: 1px solid #4a7ab5; "
                     "border-radius: 4px; padding: 4px 14px; font-size: 12px; }"
                     "QPushButton:hover { background: #3a5a8a; }"
                     "QPushButton:pressed { background: #1a3a5e; }"
                     "QPushButton:disabled { color: #808080; background: #1e2a3a; border-color: #444; }"
                 )
+                btn.setStyleSheet(host_stylesheet(button_css, button_css))
                 btn.clicked.connect(lambda checked, o=opt: self._on_option(o))
                 btn_layout.addWidget(btn)
             btn_layout.addStretch()
@@ -464,7 +641,13 @@ class ExplorationPhaseWidget(QFrame):
     def __init__(self, from_phase: str, to_phase: str, reason: str = "", parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
-        self.setStyleSheet("QFrame#message_tool { border-color: #d7ba7d; background: #2d2a1f; }")
+        self.setStyleSheet(
+            _tool_frame_style(
+                source=parent or self,
+                accent="#d7ba7d",
+                background="#2d2a1f",
+            )
+        )
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
@@ -472,13 +655,23 @@ class ExplorationPhaseWidget(QFrame):
 
         icon = self._PHASE_ICONS.get(to_phase, "\u2192")
         self._phase_label = QLabel(f"{icon}  Phase: {to_phase.upper()}")
-        self._phase_label.setStyleSheet("color: #d7ba7d; font-weight: bold; font-size: 11px;")
+        self._phase_label.setStyleSheet(
+            host_stylesheet(
+                "color: #d7ba7d; font-weight: bold; font-size: 11px;",
+                f"color: #d7ba7d; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._phase_label)
 
         if reason:
             self._reason_label = QLabel(reason)
             self._reason_label.setWordWrap(True)
-            self._reason_label.setStyleSheet("color: #b0a070; font-size: 11px;")
+            self._reason_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #b0a070; font-size: 11px;",
+                    f"color: #b0a070; {_native_text_style(size=11)}",
+                )
+            )
             layout.addWidget(self._reason_label, 1)
 
 
@@ -507,29 +700,49 @@ class ExplorationFindingWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("message_tool")
         color = self._CATEGORY_COLORS.get(category, "#808080")
-        self.setStyleSheet(f"QFrame#message_tool {{ border-color: {color}; }}")
+        self.setStyleSheet(_tool_frame_style(source=parent or self, accent=color))
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(6)
 
         self._cat_label = QLabel(f"[{category}]")
-        self._cat_label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 10px;")
+        self._cat_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-weight: bold; font-size: 10px;",
+                f"color: {color}; {_native_text_style(size=10, bold=True)}",
+            )
+        )
         layout.addWidget(self._cat_label)
 
         if address:
             self._addr_label = QLabel(address)
-            self._addr_label.setStyleSheet("color: #808080; font-family: monospace; font-size: 10px;")
+            self._addr_label.setStyleSheet(
+                host_stylesheet(
+                    f"color: {_MUTED_TEXT}; font-family: monospace; font-size: 10px;",
+                    f"color: {_MUTED_TEXT}; {_native_text_style(size=10, monospace=True)}",
+                )
+            )
             layout.addWidget(self._addr_label)
 
         self._summary_label = QLabel(summary)
         self._summary_label.setWordWrap(True)
-        self._summary_label.setStyleSheet("color: #d4d4d4; font-size: 11px;")
+        self._summary_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_BODY_TEXT}; font-size: 11px;",
+                f"color: {_BODY_TEXT}; {_native_text_style(size=11)}",
+            )
+        )
         layout.addWidget(self._summary_label, 1)
 
         if relevance == "high":
             rel_label = QLabel("\u2605")
-            rel_label.setStyleSheet("color: #d7ba7d; font-size: 12px;")
+            rel_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #d7ba7d; font-size: 12px;",
+                    f"color: #d7ba7d; {_native_text_style(size=12, bold=True)}",
+                )
+            )
             rel_label.setToolTip("High relevance")
             layout.addWidget(rel_label)
 
@@ -549,7 +762,7 @@ class ResearchNoteWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("message_tool")
         accent = "#6a9955" if review_passed else "#d7ba7d"
-        self.setStyleSheet(f"QFrame#message_tool {{ border-color: {accent}; }}")
+        self.setStyleSheet(_tool_frame_style(source=parent or self, accent=accent))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
@@ -559,25 +772,45 @@ class ResearchNoteWidget(QFrame):
         header = QHBoxLayout()
         icon = "\u2705" if review_passed else "\u270f"  # checkmark or pencil
         self._title_label = QLabel(f"{icon}  {title}")
-        self._title_label.setStyleSheet(f"color: {accent}; font-weight: bold; font-size: 11px;")
+        self._title_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {accent}; font-weight: bold; font-size: 11px;",
+                f"color: {accent}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         header.addWidget(self._title_label)
 
         self._genre_label = QLabel(f"#{genre}")
-        self._genre_label.setStyleSheet("color: #808080; font-size: 10px; font-style: italic;")
+        self._genre_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {_MUTED_TEXT}; font-size: 10px; font-style: italic;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10, italic=True)}",
+            )
+        )
         header.addWidget(self._genre_label)
         header.addStretch()
         layout.addLayout(header)
 
         # Path
         self._path_label = QLabel(path)
-        self._path_label.setStyleSheet("color: #606060; font-family: monospace; font-size: 10px;")
+        self._path_label.setStyleSheet(
+            host_stylesheet(
+                "color: #606060; font-family: monospace; font-size: 10px;",
+                f"color: #606060; {_native_text_style(size=10, monospace=True)}",
+            )
+        )
         layout.addWidget(self._path_label)
 
         # Preview
         if preview:
             self._preview_label = QLabel(preview)
             self._preview_label.setWordWrap(True)
-            self._preview_label.setStyleSheet("color: #a0a0a0; font-size: 11px;")
+            self._preview_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #a0a0a0; font-size: 11px;",
+                    f"color: #a0a0a0; {_native_text_style(size=11)}",
+                )
+            )
             layout.addWidget(self._preview_label)
 
 
@@ -600,7 +833,13 @@ class SubagentEventWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("message_tool")
         color = self._STATUS_COLORS.get(status, "#808080")
-        self.setStyleSheet(f"QFrame#message_tool {{ border-color: {color}; background: #252530; }}")
+        self.setStyleSheet(
+            _tool_frame_style(
+                source=parent or self,
+                accent=color,
+                background="#252530",
+            )
+        )
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
@@ -609,18 +848,33 @@ class SubagentEventWidget(QFrame):
         icon_map = {"spawned": "\u25b6", "completed": "\u2714", "failed": "\u2718"}
         icon = icon_map.get(status, "\u2022")
         self._icon = QLabel(icon)
-        self._icon.setStyleSheet(f"color: {color}; font-size: 14px;")
+        self._icon.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-size: 14px;",
+                f"color: {color}; {_native_text_style(size=14)}",
+            )
+        )
         layout.addWidget(self._icon)
 
         label_text = f"Subagent \u201c{name}\u201d {status}"
         self._label = QLabel(label_text)
-        self._label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 11px;")
+        self._label.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-weight: bold; font-size: 11px;",
+                f"color: {color}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._label)
 
         if detail:
             self._detail = QLabel(detail)
             self._detail.setWordWrap(True)
-            self._detail.setStyleSheet("color: #b0b0b0; font-size: 11px;")
+            self._detail.setStyleSheet(
+                host_stylesheet(
+                    "color: #b0b0b0; font-size: 11px;",
+                    f"color: #b0b0b0; {_native_text_style(size=11)}",
+                )
+            )
             layout.addWidget(self._detail, 1)
 
 
@@ -630,13 +884,23 @@ class ErrorMessageWidget(QFrame):
     def __init__(self, error_text: str, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
-        self.setStyleSheet("QFrame#message_tool { border-color: #f44747; }")
+        self.setStyleSheet(
+            _tool_frame_style(
+                source=parent or self,
+                accent="#f44747",
+            )
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
 
         self._header = QLabel("Error")
-        self._header.setStyleSheet("color: #f44747; font-weight: bold; font-size: 11px;")
+        self._header.setStyleSheet(
+            host_stylesheet(
+                "color: #f44747; font-weight: bold; font-size: 11px;",
+                f"color: #f44747; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._header)
 
         self._content = QLabel(error_text)
@@ -647,7 +911,12 @@ class ErrorMessageWidget(QFrame):
                 Qt.TextInteractionFlag.TextSelectableByKeyboard,
             )
         )
-        self._content.setStyleSheet("color: #f44747; font-size: 12px;")
+        self._content.setStyleSheet(
+            host_stylesheet(
+                "color: #f44747; font-size: 12px;",
+                f"color: #f44747; {_native_text_style(size=12)}",
+            )
+        )
         self._content.setMinimumWidth(0)
         self._content.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._content)

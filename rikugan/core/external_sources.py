@@ -2,12 +2,12 @@
 
 Platform notes
 --------------
-Both Claude Code and Codex use ``~/.claude/`` and ``~/.codex/`` respectively on
-**all** platforms (macOS, Linux, Windows).  Python's ``Path.home()`` resolves
-``~`` correctly on each OS (``%USERPROFILE%`` on Windows, ``$HOME`` elsewhere).
+Claude Code and Codex skills/config are resolved through helper functions in
+this module so the rest of the UI does not hardcode Unix-style ``~/.foo``
+labels. On Windows these helpers still resolve under the user's profile
+directory unless an explicit override is supported.
 
-Codex honours the ``CODEX_HOME`` environment variable as an override for
-``~/.codex/``.
+Codex honours the ``CODEX_HOME`` environment variable as an override.
 
 Claude Code enterprise/managed MCP configs live in platform-specific paths:
 
@@ -41,23 +41,39 @@ from ..skills.loader import SkillDefinition, discover_skills
 
 
 def get_claude_code_base() -> Path:
-    """Return the Claude Code config directory (~/.claude).
-
-    Same path on macOS, Linux, and Windows.
-    """
+    """Return the Claude Code config directory."""
     return Path.home() / ".claude"
 
 
 def get_codex_base() -> Path:
     """Return the Codex CLI config directory.
 
-    Respects the ``CODEX_HOME`` environment variable; falls back to
-    ``~/.codex/``.  Same fallback path on macOS, Linux, and Windows.
+    Respects the ``CODEX_HOME`` environment variable; falls back to the user's
+    Codex config directory under their profile.
     """
     codex_home = os.environ.get("CODEX_HOME", "").strip()
     if codex_home:
         return Path(codex_home)
     return Path.home() / ".codex"
+
+
+def get_claude_skills_dir() -> Path:
+    """Return the Claude Code skills directory."""
+    return get_claude_code_base() / "skills"
+
+
+def get_codex_skills_dir() -> Path:
+    """Return the Codex skills directory."""
+    return get_codex_base() / "skills"
+
+
+def get_external_skills_title(source_key: str) -> str:
+    """Return a settings-tab title with the resolved directory path."""
+    if source_key == "claude":
+        return f"Claude Code Skills ({get_claude_skills_dir()})"
+    if source_key == "codex":
+        return f"Codex Skills ({get_codex_skills_dir()})"
+    return f"{source_key} Skills"
 
 
 def _get_claude_managed_mcp_path() -> Path | None:
@@ -78,15 +94,15 @@ def _get_claude_managed_mcp_path() -> Path | None:
 
 
 def discover_claude_skills() -> list[SkillDefinition]:
-    """Scan ``~/.claude/skills/`` for Claude Code skills."""
-    skills_dir = get_claude_code_base() / "skills"
+    """Scan the Claude Code skills directory."""
+    skills_dir = get_claude_skills_dir()
     log_debug(f"Scanning Claude Code skills: {skills_dir}")
     return discover_skills(str(skills_dir))
 
 
 def discover_codex_skills() -> list[SkillDefinition]:
-    """Scan ``~/.codex/skills/`` for Codex skills."""
-    skills_dir = get_codex_base() / "skills"
+    """Scan the Codex skills directory."""
+    skills_dir = get_codex_skills_dir()
     log_debug(f"Scanning Codex skills: {skills_dir}")
     return discover_skills(str(skills_dir))
 

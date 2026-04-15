@@ -22,13 +22,51 @@ from .qt_compat import (
     QWidget,
     qt_flags,
 )
+from .styles import host_stylesheet, use_native_host_theme
 
 _MAX_ARGS_DISPLAY = 2000
 _MAX_RESULT_DISPLAY = 3000
 _TOOL_PREVIEW_LINES = 3
+_MUTED_TEXT = "#808080"
+_TOOL_BG = "#252526"
+_TOOL_BORDER = "#3c3c3c"
+
+
+def _tool_card_css(
+    source=None,
+    *,
+    accent: str | None = None,
+    background: str | None = None,
+    radius: int = 6,
+    object_name: str = "message_tool",
+) -> str:
+    del source
+    border = accent or _TOOL_BORDER
+    bg = background or _TOOL_BG
+    return f"QFrame#{object_name} {{ background-color: {bg}; border: 1px solid {border}; border-radius: {radius}px; }}"
+
+
+def _native_text_style(
+    *,
+    size: int | None = None,
+    bold: bool = False,
+    italic: bool = False,
+    monospace: bool = False,
+) -> str:
+    parts: list[str] = []
+    if size is not None:
+        parts.append(f"font-size: {size}px;")
+    if bold:
+        parts.append("font-weight: bold;")
+    if italic:
+        parts.append("font-style: italic;")
+    if monospace:
+        parts.append('font-family: Consolas, "Courier New", monospace;')
+    return " ".join(parts)
+
 
 # ---------------------------------------------------------------------------
-# MCP prefix stripping — works with any MCP server, not just a specific one
+# MCP prefix stripping - works with any MCP server, not just a specific one
 # ---------------------------------------------------------------------------
 
 
@@ -43,7 +81,7 @@ def _strip_mcp_prefix(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tool-specific colors (by base name — MCP prefix is stripped before lookup)
+# Tool-specific colors (by base name - MCP prefix is stripped before lookup)
 # ---------------------------------------------------------------------------
 _TOOL_COLORS: dict[str, str] = {}
 
@@ -215,14 +253,14 @@ def _format_tool_summary(tool_name: str, args_text: str) -> str:
         old = _get("old_name", "current_name", "ea")
         new = _get("new_name")
         if old and new:
-            summary = f"{old} → {new}"
+            summary = f"{old} \u2192 {new}"
 
     elif short_name in ("rename_single_variable", "rename_variable"):
         func = _get("function_name", "function", "ea")
         old = _get("variable_name", "var_name", "old_name")
         new = _get("new_name")
         if old and new:
-            summary = f"{func}: {old} → {new}" if func else f"{old} → {new}"
+            summary = f"{func}: {old} \u2192 {new}" if func else f"{old} \u2192 {new}"
 
     elif short_name in ("rename_multi_variables",):
         func = _get("function_identifier", "function_name", "ea")
@@ -320,7 +358,7 @@ def _format_tool_summary(tool_name: str, args_text: str) -> str:
         reason = _get("reason")
         if reason and len(reason) > 40:
             reason = reason[:37] + "..."
-        summary = f"→ {phase}" + (f": {reason}" if reason else "")
+        summary = f"\u2192 {phase}" + (f": {reason}" if reason else "")
 
     else:
         # Generic: try common parameter names
@@ -347,21 +385,27 @@ def _format_tool_summary(tool_name: str, args_text: str) -> str:
 
 
 def _truncate_preview(text: str, max_lines: int = _TOOL_PREVIEW_LINES) -> str:
-    """Return first N lines with a '… +M lines' indicator if truncated."""
+    """Return first N lines with a '... +M lines' indicator if truncated."""
     lines = text.split("\n")
     if len(lines) <= max_lines:
         return text
     preview = "\n".join(lines[:max_lines])
     remaining = len(lines) - max_lines
-    return f"{preview}\n… +{remaining} lines"
+    return f"{preview}\n\u2026 +{remaining} lines"
 
 
-def _make_preview_label() -> QLabel:
+def _make_preview_label(source=None) -> QLabel:
     """Create a collapsed-state preview QLabel (shared by ToolCallWidget/ToolBatchWidget)."""
+    del source
     lbl = QLabel()
     lbl.setObjectName("tool_content")
     lbl.setWordWrap(True)
-    lbl.setStyleSheet("color: #6a6a7a; font-family: monospace; font-size: 10px; margin-left: 28px;")
+    lbl.setStyleSheet(
+        host_stylesheet(
+            "color: #6a6a7a; font-family: monospace; font-size: 10px; margin-left: 28px;",
+            f"color: {_MUTED_TEXT}; {_native_text_style(size=10, monospace=True)}",
+        )
+    )
     lbl.setVisible(False)
     return lbl
 
@@ -435,15 +479,27 @@ class _SharedSpinnerTimer:
 class ToolCallWidget(QFrame):
     """Compact tool call display.
 
-    Shows:  ● tool_name  summary_text
+    Shows:  [dot] tool_name  summary_text
     With a collapsible detail section for args and result.
     """
 
-    _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    _SPINNER_FRAMES = (
+        "\u280b",
+        "\u2819",
+        "\u2839",
+        "\u2838",
+        "\u283c",
+        "\u2834",
+        "\u2826",
+        "\u2827",
+        "\u2807",
+        "\u280f",
+    )
 
     def __init__(self, tool_name: str, tool_call_id: str, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
+        self.setStyleSheet(_tool_card_css(object_name="message_tool"))
         self._tool_name = tool_name
         self._tool_call_id = tool_call_id
         self._args_text = ""
@@ -462,7 +518,7 @@ class ToolCallWidget(QFrame):
         layout.addWidget(self._build_detail_section())
 
     def _build_header(self, tool_name: str) -> QHBoxLayout:
-        """Build the compact header row: toggle ● name  summary  status."""
+        """Build the compact header row: toggle bullet name summary status."""
         display_name = _strip_mcp_prefix(tool_name)
         color = _tool_color(tool_name)
 
@@ -472,33 +528,53 @@ class ToolCallWidget(QFrame):
 
         self._toggle_btn = QToolButton()
         self._toggle_btn.setObjectName("collapse_button")
-        self._toggle_btn.setText("▶")
+        self._toggle_btn.setText("\u25b6")
         self._toggle_btn.setFixedSize(14, 14)
         self._toggle_btn.clicked.connect(self._toggle)
         header_layout.addWidget(self._toggle_btn)
 
-        self._bullet = QLabel("●")
-        self._bullet.setStyleSheet(f"color: {color}; font-size: 10px;")
+        self._bullet = QLabel("\u25cf")
+        self._bullet.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-size: 10px;",
+                f"color: {color}; {_native_text_style(size=10)}",
+            )
+        )
         self._bullet.setFixedWidth(14)
         header_layout.addWidget(self._bullet)
 
         self._name_label = QLabel(display_name)
-        self._name_label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 11px;")
+        self._name_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-weight: bold; font-size: 11px;",
+                f"color: {color}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         header_layout.addWidget(self._name_label)
 
         self._summary_label = QLabel("")
-        self._summary_label.setStyleSheet("color: #808080; font-size: 11px; margin-left: 6px;")
+        self._summary_label.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-size: 11px; margin-left: 6px;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11)}",
+            )
+        )
         header_layout.addWidget(self._summary_label, 1)
 
         self._status_label = QLabel(self._SPINNER_FRAMES[0])
-        self._status_label.setStyleSheet("color: #dcdcaa; font-size: 10px;")
+        self._status_label.setStyleSheet(
+            host_stylesheet(
+                "color: #dcdcaa; font-size: 10px;",
+                f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
+            )
+        )
         header_layout.addWidget(self._status_label)
 
         return header_layout
 
     def _build_preview(self) -> QLabel:
         """Build the preview label (truncated args, shown when collapsed)."""
-        self._preview_label = _make_preview_label()
+        self._preview_label = _make_preview_label(self)
         return self._preview_label
 
     def _build_detail_section(self) -> QWidget:
@@ -520,7 +596,12 @@ class ToolCallWidget(QFrame):
         self._detail_layout.addWidget(self._args_label)
 
         self._result_header = QLabel("Result:")
-        self._result_header.setStyleSheet("color: #808080; font-size: 10px; font-weight: bold;")
+        self._result_header.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-size: 10px; font-weight: bold;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10, bold=True)}",
+            )
+        )
         self._result_header.setVisible(False)
         self._detail_layout.addWidget(self._result_header)
 
@@ -552,7 +633,7 @@ class ToolCallWidget(QFrame):
         self._expanded = not self._expanded
         self._detail_widget.setVisible(self._expanded)
         self._preview_label.setVisible(not self._expanded and bool(self._args_text))
-        self._toggle_btn.setText("▼" if self._expanded else "▶")
+        self._toggle_btn.setText("\u25bc" if self._expanded else "\u25b6")
 
     def set_arguments(self, args_text: str) -> None:
         self._args_text = args_text
@@ -570,7 +651,7 @@ class ToolCallWidget(QFrame):
 
     def append_args_delta(self, delta: str) -> None:
         self._args_text += delta
-        # Don't update preview during streaming — wait for set_arguments
+        # Don't update preview during streaming - wait for set_arguments
 
     def set_result(self, result: str, is_error: bool = False) -> None:
         self._stop_spinner()
@@ -581,24 +662,49 @@ class ToolCallWidget(QFrame):
         self._result_label.setVisible(True)
         self._result_header.setVisible(True)
         if is_error:
-            self._result_label.setStyleSheet("color: #f44747; font-family: monospace; font-size: 11px;")
-            self._status_label.setText("✗")
-            self._status_label.setStyleSheet("color: #f44747; font-size: 10px;")
-            self._bullet.setStyleSheet("color: #f44747; font-size: 10px;")
+            self._result_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #f44747; font-family: monospace; font-size: 11px;",
+                    f"color: #f44747; {_native_text_style(size=11, monospace=True)}",
+                )
+            )
+            self._status_label.setText("\u2717")
+            self._status_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #f44747; font-size: 10px;",
+                    f"color: #f44747; {_native_text_style(size=10, bold=True)}",
+                )
+            )
+            self._bullet.setStyleSheet(
+                host_stylesheet(
+                    "color: #f44747; font-size: 10px;",
+                    "color: #f44747; font-size: 10px;",
+                )
+            )
             # Auto-expand on error
             self._expanded = True
             self._detail_widget.setVisible(True)
             self._preview_label.setVisible(False)
-            self._toggle_btn.setText("▼")
+            self._toggle_btn.setText("\u25bc")
         else:
-            self._status_label.setText("✓")
-            self._status_label.setStyleSheet("color: #4ec9b0; font-size: 10px;")
+            self._status_label.setText("\u2713")
+            self._status_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #4ec9b0; font-size: 10px;",
+                    f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
+                )
+            )
 
     def mark_done(self) -> None:
         self._stop_spinner()
-        if self._status_label.text() not in ("✓", "✗"):
-            self._status_label.setText("✓")
-            self._status_label.setStyleSheet("color: #4ec9b0; font-size: 10px;")
+        if self._status_label.text() not in ("\u2713", "\u2717"):
+            self._status_label.setText("\u2713")
+            self._status_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #4ec9b0; font-size: 10px;",
+                    f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
+                )
+            )
 
     def hide_preview(self) -> None:
         """Hide the args preview (used when preview budget exhausted)."""
@@ -606,20 +712,21 @@ class ToolCallWidget(QFrame):
 
 
 # ---------------------------------------------------------------------------
-# Tool batch widget — groups N consecutive calls to the same tool
+# Tool batch widget - groups N consecutive calls to the same tool
 # ---------------------------------------------------------------------------
 
 
 class ToolBatchWidget(QFrame):
     """Groups consecutive calls to the same tool.
 
-    Shows:  ● tool_name  (N calls)
+    Shows:  [dot] tool_name  (N calls)
     With preview of the first call's args.
     """
 
     def __init__(self, tool_name: str, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
+        self.setStyleSheet(_tool_card_css(object_name="message_tool"))
         self._tool_name = tool_name
         self._count = 0
         self._expanded = False
@@ -638,7 +745,7 @@ class ToolBatchWidget(QFrame):
         layout.addWidget(self._build_detail_section())
 
     def _build_header(self, tool_name: str) -> QHBoxLayout:
-        """Build the compact header row: toggle ● name  count  status."""
+        """Build the compact header row: toggle bullet name count status."""
         display_name = _strip_mcp_prefix(tool_name)
         color = _tool_color(tool_name)
 
@@ -648,33 +755,53 @@ class ToolBatchWidget(QFrame):
 
         self._toggle_btn = QToolButton()
         self._toggle_btn.setObjectName("collapse_button")
-        self._toggle_btn.setText("▶")
+        self._toggle_btn.setText("\u25b6")
         self._toggle_btn.setFixedSize(14, 14)
         self._toggle_btn.clicked.connect(self._toggle)
         header_layout.addWidget(self._toggle_btn)
 
-        self._bullet = QLabel("●")
-        self._bullet.setStyleSheet(f"color: {color}; font-size: 10px;")
+        self._bullet = QLabel("\u25cf")
+        self._bullet.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-size: 10px;",
+                f"color: {color}; {_native_text_style(size=10)}",
+            )
+        )
         self._bullet.setFixedWidth(14)
         header_layout.addWidget(self._bullet)
 
         self._name_label = QLabel(display_name)
-        self._name_label.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 11px;")
+        self._name_label.setStyleSheet(
+            host_stylesheet(
+                f"color: {color}; font-weight: bold; font-size: 11px;",
+                f"color: {color}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         header_layout.addWidget(self._name_label)
 
         self._count_label = QLabel("")
-        self._count_label.setStyleSheet("color: #808080; font-size: 11px; margin-left: 6px;")
+        self._count_label.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-size: 11px; margin-left: 6px;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11)}",
+            )
+        )
         header_layout.addWidget(self._count_label, 1)
 
-        self._status_label = QLabel("…")
-        self._status_label.setStyleSheet("color: #dcdcaa; font-size: 10px;")
+        self._status_label = QLabel("\u2026")
+        self._status_label.setStyleSheet(
+            host_stylesheet(
+                "color: #dcdcaa; font-size: 10px;",
+                f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
+            )
+        )
         header_layout.addWidget(self._status_label)
 
         return header_layout
 
     def _build_preview(self) -> QLabel:
         """Build the preview label for the first call's args."""
-        self._preview_label = _make_preview_label()
+        self._preview_label = _make_preview_label(self)
         return self._preview_label
 
     def _build_detail_section(self) -> QWidget:
@@ -703,7 +830,12 @@ class ToolBatchWidget(QFrame):
         # Add entry in detail area
         summary = _format_tool_summary(self._tool_name, args_text) if args_text else ""
         entry = QLabel(f"#{self._count}: {summary}" if summary else f"#{self._count}")
-        entry.setStyleSheet("color: #808080; font-family: monospace; font-size: 10px;")
+        entry.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-family: monospace; font-size: 10px;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10, monospace=True)}",
+            )
+        )
         entry.setWordWrap(True)
         self._entry_labels.append(entry)  # prevent Shiboken GC
         self._detail_layout.addWidget(entry)
@@ -743,11 +875,21 @@ class ToolBatchWidget(QFrame):
         done = len(self._results) + len(self._errors)
         if done >= self._count:
             if self._errors:
-                self._status_label.setText(f"✓{len(self._results)} ✗{len(self._errors)}")
-                self._status_label.setStyleSheet("color: #f44747; font-size: 10px;")
+                self._status_label.setText(f"\u2713{len(self._results)} \u2717{len(self._errors)}")
+                self._status_label.setStyleSheet(
+                    host_stylesheet(
+                        "color: #f44747; font-size: 10px;",
+                        f"color: #f44747; {_native_text_style(size=10, bold=True)}",
+                    )
+                )
             else:
-                self._status_label.setText("✓")
-                self._status_label.setStyleSheet("color: #4ec9b0; font-size: 10px;")
+                self._status_label.setText("\u2713")
+                self._status_label.setStyleSheet(
+                    host_stylesheet(
+                        "color: #4ec9b0; font-size: 10px;",
+                        f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
+                    )
+                )
         else:
             self._status_label.setText(f"{done}/{self._count}")
 
@@ -755,7 +897,7 @@ class ToolBatchWidget(QFrame):
         self._expanded = not self._expanded
         self._detail_widget.setVisible(self._expanded)
         self._preview_label.setVisible(not self._expanded and bool(self._first_args))
-        self._toggle_btn.setText("▼" if self._expanded else "▶")
+        self._toggle_btn.setText("\u25bc" if self._expanded else "\u25b6")
 
     @property
     def tool_name(self) -> str:
@@ -767,7 +909,7 @@ class ToolBatchWidget(QFrame):
 
 
 # ---------------------------------------------------------------------------
-# Tool group widget — collapsible container for runs of tool calls
+# Tool group widget - collapsible container for runs of tool calls
 # ---------------------------------------------------------------------------
 
 
@@ -777,6 +919,7 @@ class ToolGroupWidget(QFrame):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
+        self.setStyleSheet(_tool_card_css(object_name="message_tool"))
         self._expanded = False
         self._count = 0
         self._done = 0
@@ -787,24 +930,34 @@ class ToolGroupWidget(QFrame):
         layout.setContentsMargins(6, 3, 6, 3)
         layout.setSpacing(0)
 
-        # Header: ▶ <summary label>  ✓
+        # Header: > <summary label> ok
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(6)
 
         self._toggle_btn = QToolButton()
         self._toggle_btn.setObjectName("collapse_button")
-        self._toggle_btn.setText("▶")
+        self._toggle_btn.setText("\u25b6")
         self._toggle_btn.setFixedSize(14, 14)
         self._toggle_btn.clicked.connect(self._toggle)
         header_layout.addWidget(self._toggle_btn)
 
         self._label = QLabel("0 tools called")
-        self._label.setStyleSheet("color: #808080; font-size: 11px; font-weight: bold;")
+        self._label.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-size: 11px; font-weight: bold;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         header_layout.addWidget(self._label, 1)
 
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color: #dcdcaa; font-size: 10px;")
+        self._status_label.setStyleSheet(
+            host_stylesheet(
+                "color: #dcdcaa; font-size: 10px;",
+                f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
+            )
+        )
         header_layout.addWidget(self._status_label)
 
         layout.addLayout(header_layout)
@@ -838,19 +991,34 @@ class ToolGroupWidget(QFrame):
         if self._done >= self._count:
             if self._errors:
                 ok = self._done - self._errors
-                self._status_label.setText(f"✓{ok} ✗{self._errors}")
-                self._status_label.setStyleSheet("color: #f44747; font-size: 10px;")
+                self._status_label.setText(f"\u2713{ok} \u2717{self._errors}")
+                self._status_label.setStyleSheet(
+                    host_stylesheet(
+                        "color: #f44747; font-size: 10px;",
+                        f"color: #f44747; {_native_text_style(size=10, bold=True)}",
+                    )
+                )
             else:
-                self._status_label.setText("✓")
-                self._status_label.setStyleSheet("color: #4ec9b0; font-size: 10px;")
+                self._status_label.setText("\u2713")
+                self._status_label.setStyleSheet(
+                    host_stylesheet(
+                        "color: #4ec9b0; font-size: 10px;",
+                        f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
+                    )
+                )
         else:
             self._status_label.setText(f"{self._done}/{self._count}")
-            self._status_label.setStyleSheet("color: #dcdcaa; font-size: 10px;")
+            self._status_label.setStyleSheet(
+                host_stylesheet(
+                    "color: #dcdcaa; font-size: 10px;",
+                    f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
+                )
+            )
 
     def _toggle(self) -> None:
         self._expanded = not self._expanded
         self._body.setVisible(self._expanded)
-        self._toggle_btn.setText("▼" if self._expanded else "▶")
+        self._toggle_btn.setText("\u25bc" if self._expanded else "\u25b6")
 
     @property
     def count(self) -> int:
@@ -865,7 +1033,7 @@ class ToolGroupWidget(QFrame):
 class _PythonHighlighter(QSyntaxHighlighter):
     """Minimal VS Code-dark-style Python syntax highlighter."""
 
-    _RULES: ClassVar[list] = []  # built once in __init_subclass__ — see below
+    _RULES: ClassVar[list] = []  # built once in __init_subclass__ - see below
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -988,7 +1156,15 @@ class ToolApprovalWidget(QFrame):
         self._approved_callback = None
         self.setObjectName("message_question")
         self.setStyleSheet(
-            "QFrame#message_question { border: 1px solid #dcdcaa; border-radius: 6px; background: #2d2d1e; }"
+            host_stylesheet(
+                "QFrame#message_question { border: 1px solid #dcdcaa; border-radius: 6px; background: #2d2d1e; }",
+                _tool_card_css(
+                    parent or self,
+                    accent="#dcdcaa",
+                    background="#2d2d1e",
+                    object_name="message_question",
+                ),
+            )
         )
         self._tool_call_id = tool_call_id
 
@@ -996,14 +1172,24 @@ class ToolApprovalWidget(QFrame):
         layout.setContentsMargins(8, 6, 8, 6)
 
         self._header = QLabel("Approve execute_python?")
-        self._header.setStyleSheet("color: #dcdcaa; font-weight: bold; font-size: 11px;")
+        self._header.setStyleSheet(
+            host_stylesheet(
+                "color: #dcdcaa; font-weight: bold; font-size: 11px;",
+                f"color: #dcdcaa; {_native_text_style(size=11, bold=True)}",
+            )
+        )
         layout.addWidget(self._header)
 
         code = self._extract_code(args_text)
         code_lines = code.strip().splitlines() if code.strip() else []
 
-        self._info = QLabel(f"Python code — {len(code_lines)} line{'s' if len(code_lines) != 1 else ''}")
-        self._info.setStyleSheet("color: #808080; font-size: 10px;")
+        self._info = QLabel(f"Python code - {len(code_lines)} line{'s' if len(code_lines) != 1 else ''}")
+        self._info.setStyleSheet(
+            host_stylesheet(
+                "color: #808080; font-size: 10px;",
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10)}",
+            )
+        )
         layout.addWidget(self._info)
 
         editor = self._build_code_editor(code, code_lines)
@@ -1032,22 +1218,25 @@ class ToolApprovalWidget(QFrame):
         self._code_edit.setReadOnly(True)
         self._code_edit.setPlainText(code)
         self._code_edit.setStyleSheet(
-            "QPlainTextEdit { "
-            "  color: #d4d4d4; background: #1e1e2e; "
-            "  font-family: 'Consolas', 'Monaco', 'Courier New', monospace; "
-            "  font-size: 11px; border: 1px solid #3c3c3c; border-radius: 4px; "
-            "  padding: 4px; "
-            "}"
-            "QScrollBar:vertical { width: 8px; background: #1e1e2e; }"
-            "QScrollBar::handle:vertical { background: #3c3c3c; border-radius: 4px; }"
-            "QScrollBar:horizontal { height: 8px; background: #1e1e2e; }"
-            "QScrollBar::handle:horizontal { background: #3c3c3c; border-radius: 4px; }"
+            host_stylesheet(
+                "QPlainTextEdit { "
+                "  color: #d4d4d4; background: #1e1e2e; "
+                "  font-family: 'Consolas', 'Monaco', 'Courier New', monospace; "
+                "  font-size: 11px; border: 1px solid #3c3c3c; border-radius: 4px; "
+                "  padding: 4px; "
+                "}"
+                "QScrollBar:vertical { width: 8px; background: #1e1e2e; }"
+                "QScrollBar::handle:vertical { background: #3c3c3c; border-radius: 4px; }"
+                "QScrollBar:horizontal { height: 8px; background: #1e1e2e; }"
+                "QScrollBar::handle:horizontal { background: #3c3c3c; border-radius: 4px; }"
+            )
         )
         self._code_edit.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         visible_lines = min(len(lines), 15)
         line_height = self._code_edit.fontMetrics().lineSpacing()
         self._code_edit.setFixedHeight(line_height * visible_lines + 16)
-        self._highlighter = _PythonHighlighter(self._code_edit.document())
+        if not use_native_host_theme():
+            self._highlighter = _PythonHighlighter(self._code_edit.document())
         return self._code_edit
 
     def _build_approval_buttons(self) -> QHBoxLayout:
@@ -1057,31 +1246,34 @@ class ToolApprovalWidget(QFrame):
 
         self._allow_btn = QToolButton()
         self._allow_btn.setText("  Allow  ")
-        self._allow_btn.setStyleSheet(
+        allow_css = (
             "QToolButton { background: #2ea043; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
             "QToolButton:hover { background: #3fb950; }"
         )
+        self._allow_btn.setStyleSheet(host_stylesheet(allow_css, allow_css))
         self._allow_btn.clicked.connect(self._on_allow)
         btn_layout.addWidget(self._allow_btn)
 
         self._always_btn = QToolButton()
         self._always_btn.setText("  Always Allow  ")
-        self._always_btn.setStyleSheet(
+        always_css = (
             "QToolButton { background: #1a5c2d; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
             "QToolButton:hover { background: #2ea043; }"
         )
+        self._always_btn.setStyleSheet(host_stylesheet(always_css, always_css))
         self._always_btn.clicked.connect(self._on_always_allow)
         btn_layout.addWidget(self._always_btn)
 
         self._deny_btn = QToolButton()
         self._deny_btn.setText("  Deny  ")
-        self._deny_btn.setStyleSheet(
+        deny_css = (
             "QToolButton { background: #c42b1c; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
             "QToolButton:hover { background: #e04030; }"
         )
+        self._deny_btn.setStyleSheet(host_stylesheet(deny_css, deny_css))
         self._deny_btn.clicked.connect(self._on_deny)
         btn_layout.addWidget(self._deny_btn)
 
@@ -1096,29 +1288,32 @@ class ToolApprovalWidget(QFrame):
     def _on_allow(self):
         self._disable_buttons()
         self._allow_btn.setText("  Allowed  ")
-        self._allow_btn.setStyleSheet(
+        allowed_css = (
             "QToolButton { background: #1a5c2d; color: #808080; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
         )
+        self._allow_btn.setStyleSheet(host_stylesheet(allowed_css, allowed_css))
         if self._approved_callback is not None:
             self._approved_callback(self._tool_call_id, "allow")
 
     def _on_always_allow(self):
         self._disable_buttons()
         self._always_btn.setText("  Always Allowed  ")
-        self._always_btn.setStyleSheet(
+        always_allowed_css = (
             "QToolButton { background: #1a5c2d; color: #808080; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
         )
+        self._always_btn.setStyleSheet(host_stylesheet(always_allowed_css, always_allowed_css))
         if self._approved_callback is not None:
             self._approved_callback(self._tool_call_id, "allow_all")
 
     def _on_deny(self):
         self._disable_buttons()
         self._deny_btn.setText("  Denied  ")
-        self._deny_btn.setStyleSheet(
+        denied_css = (
             "QToolButton { background: #6e1a12; color: #808080; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
         )
+        self._deny_btn.setStyleSheet(host_stylesheet(denied_css, denied_css))
         if self._approved_callback is not None:
             self._approved_callback(self._tool_call_id, "deny")

@@ -10,6 +10,7 @@ from .qt_compat import (
     QVBoxLayout,
     QWidget,
 )
+from .styles import maybe_host_stylesheet
 
 
 class PlanStepWidget(QFrame):
@@ -26,12 +27,12 @@ class PlanStepWidget(QFrame):
 
         self._status_label = QLabel("○")
         self._status_label.setFixedWidth(20)
-        self._status_label.setStyleSheet("color: #808080; font-size: 14px;")
+        self._status_label.setStyleSheet(maybe_host_stylesheet("color: #808080; font-size: 14px;"))
         layout.addWidget(self._status_label)
 
         self._step_label = QLabel(f"{index + 1}. {text}")
         self._step_label.setWordWrap(True)
-        self._step_label.setStyleSheet("color: #d4d4d4; font-size: 12px;")
+        self._step_label.setStyleSheet(maybe_host_stylesheet("color: #d4d4d4; font-size: 12px;"))
         layout.addWidget(self._step_label, 1)
 
     def set_status(self, status: str) -> None:
@@ -39,21 +40,21 @@ class PlanStepWidget(QFrame):
         if status == "active":
             self.setObjectName("plan_step_active")
             self._status_label.setText("▶")
-            self._status_label.setStyleSheet("color: #007acc; font-size: 14px;")
+            self._status_label.setStyleSheet(maybe_host_stylesheet("color: #007acc; font-size: 14px;"))
         elif status == "done":
             self.setObjectName("plan_step_done")
             self._status_label.setText("✓")
-            self._status_label.setStyleSheet("color: #4ec9b0; font-size: 14px;")
+            self._status_label.setStyleSheet(maybe_host_stylesheet("color: #4ec9b0; font-size: 14px;"))
         elif status == "error":
             self._status_label.setText("✗")
-            self._status_label.setStyleSheet("color: #f44747; font-size: 14px;")
+            self._status_label.setStyleSheet(maybe_host_stylesheet("color: #f44747; font-size: 14px;"))
         elif status == "skipped":
             self._status_label.setText("−")
-            self._status_label.setStyleSheet("color: #808080; font-size: 14px;")
+            self._status_label.setStyleSheet(maybe_host_stylesheet("color: #808080; font-size: 14px;"))
         else:
             self.setObjectName("plan_step")
             self._status_label.setText("○")
-            self._status_label.setStyleSheet("color: #808080; font-size: 14px;")
+            self._status_label.setStyleSheet(maybe_host_stylesheet("color: #808080; font-size: 14px;"))
         self.style().unpolish(self)
         self.style().polish(self)
 
@@ -78,7 +79,7 @@ class PlanView(QFrame):
 
         # Header
         self._header = QLabel("Plan")
-        self._header.setStyleSheet("color: #569cd6; font-weight: bold; font-size: 13px;")
+        self._header.setStyleSheet(maybe_host_stylesheet("color: #569cd6; font-weight: bold; font-size: 13px;"))
         layout.addWidget(self._header)
 
         # Steps container
@@ -90,18 +91,22 @@ class PlanView(QFrame):
 
         self._approve_btn = QPushButton("Approve & Execute")
         self._approve_btn.setStyleSheet(
-            "QPushButton { background: #2ea043; color: white; border: none; "
-            "border-radius: 6px; padding: 6px 16px; font-weight: bold; }"
-            "QPushButton:hover { background: #3fb950; }"
+            maybe_host_stylesheet(
+                "QPushButton { background: #2ea043; color: white; border: none; "
+                "border-radius: 6px; padding: 6px 16px; font-weight: bold; }"
+                "QPushButton:hover { background: #3fb950; }"
+            )
         )
         self._approve_btn.clicked.connect(self._fire_approved)
         btn_layout.addWidget(self._approve_btn)
 
         self._reject_btn = QPushButton("Reject")
         self._reject_btn.setStyleSheet(
-            "QPushButton { background: #c72e2e; color: white; border: none; "
-            "border-radius: 6px; padding: 6px 16px; font-weight: bold; }"
-            "QPushButton:hover { background: #d73a49; }"
+            maybe_host_stylesheet(
+                "QPushButton { background: #c72e2e; color: white; border: none; "
+                "border-radius: 6px; padding: 6px 16px; font-weight: bold; }"
+                "QPushButton:hover { background: #d73a49; }"
+            )
         )
         self._reject_btn.clicked.connect(self._fire_rejected)
         btn_layout.addWidget(self._reject_btn)
