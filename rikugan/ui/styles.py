@@ -124,10 +124,9 @@ def get_host_palette_colors(source=None) -> dict[str, str]:
 def use_native_host_theme() -> bool:
     """Return True when the host should keep its own native theme.
 
-    IDA themes through a host stylesheet, so Rikugan should inherit the
-    host's widget styling instead of forcing Rikugan's standalone theme.
-    It should not force Rikugan's standalone colors on top of IDA.
-    ``DARK_THEME`` is applied instead — it matches IDA's dark chrome.
+    IDA owns the overall dock styling, but Rikugan still derives local
+    widget surfaces from the live host colors so the chat remains readable
+    in both light and dark themes.
     """
     return is_ida()
 
@@ -203,17 +202,6 @@ QScrollArea#chat_scroll {
 
 QWidget#chat_container {
     background: transparent;
-}
-
-QFrame#message_user,
-QFrame#message_assistant,
-QFrame#message_tool,
-QFrame#message_question,
-QFrame#message_queued,
-QFrame#message_thinking,
-QFrame#thinking_block {
-    background: transparent;
-    border: none;
 }
 
 QToolButton#collapse_button {

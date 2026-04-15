@@ -27,6 +27,28 @@ from .qt_compat import (
 _MAX_ARGS_DISPLAY = 2000
 _MAX_RESULT_DISPLAY = 3000
 _TOOL_PREVIEW_LINES = 3
+_MUTED_TEXT = "#808080"
+_TOOL_BG = "#252526"
+_TOOL_BORDER = "#3c3c3c"
+
+
+def _tool_card_css(
+    source=None,
+    *,
+    accent: str | None = None,
+    background: str | None = None,
+    radius: int = 6,
+    object_name: str = "message_tool",
+) -> str:
+    del source
+    border = accent or _TOOL_BORDER
+    bg = background or _TOOL_BG
+    return (
+        f"QFrame#{object_name} {{ "
+        f"background-color: {bg}; border: 1px solid {border}; "
+        f"border-radius: {radius}px; "
+        "}"
+    )
 
 
 def _native_text_style(
@@ -377,15 +399,16 @@ def _truncate_preview(text: str, max_lines: int = _TOOL_PREVIEW_LINES) -> str:
     return f"{preview}\n\u2026 +{remaining} lines"
 
 
-def _make_preview_label() -> QLabel:
+def _make_preview_label(source=None) -> QLabel:
     """Create a collapsed-state preview QLabel (shared by ToolCallWidget/ToolBatchWidget)."""
+    del source
     lbl = QLabel()
     lbl.setObjectName("tool_content")
     lbl.setWordWrap(True)
     lbl.setStyleSheet(
         host_stylesheet(
             "color: #6a6a7a; font-family: monospace; font-size: 10px; margin-left: 28px;",
-            _native_text_style(size=10, monospace=True),
+            f"color: {_MUTED_TEXT}; {_native_text_style(size=10, monospace=True)}",
         )
     )
     lbl.setVisible(False)
@@ -481,6 +504,7 @@ class ToolCallWidget(QFrame):
     def __init__(self, tool_name: str, tool_call_id: str, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
+        self.setStyleSheet(_tool_card_css(object_name="message_tool"))
         self._tool_name = tool_name
         self._tool_call_id = tool_call_id
         self._args_text = ""
@@ -518,7 +542,7 @@ class ToolCallWidget(QFrame):
         self._bullet.setStyleSheet(
             host_stylesheet(
                 f"color: {color}; font-size: 10px;",
-                _native_text_style(size=10),
+                f"color: {color}; {_native_text_style(size=10)}",
             )
         )
         self._bullet.setFixedWidth(14)
@@ -528,7 +552,7 @@ class ToolCallWidget(QFrame):
         self._name_label.setStyleSheet(
             host_stylesheet(
                 f"color: {color}; font-weight: bold; font-size: 11px;",
-                _native_text_style(size=11, bold=True),
+                f"color: {color}; {_native_text_style(size=11, bold=True)}",
             )
         )
         header_layout.addWidget(self._name_label)
@@ -537,7 +561,7 @@ class ToolCallWidget(QFrame):
         self._summary_label.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 11px; margin-left: 6px;",
-                _native_text_style(size=11),
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11)}",
             )
         )
         header_layout.addWidget(self._summary_label, 1)
@@ -546,7 +570,7 @@ class ToolCallWidget(QFrame):
         self._status_label.setStyleSheet(
             host_stylesheet(
                 "color: #dcdcaa; font-size: 10px;",
-                _native_text_style(size=10, bold=True),
+                f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
             )
         )
         header_layout.addWidget(self._status_label)
@@ -555,7 +579,7 @@ class ToolCallWidget(QFrame):
 
     def _build_preview(self) -> QLabel:
         """Build the preview label (truncated args, shown when collapsed)."""
-        self._preview_label = _make_preview_label()
+        self._preview_label = _make_preview_label(self)
         return self._preview_label
 
     def _build_detail_section(self) -> QWidget:
@@ -580,7 +604,7 @@ class ToolCallWidget(QFrame):
         self._result_header.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 10px; font-weight: bold;",
-                _native_text_style(size=10, bold=True),
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10, bold=True)}",
             )
         )
         self._result_header.setVisible(False)
@@ -646,20 +670,20 @@ class ToolCallWidget(QFrame):
             self._result_label.setStyleSheet(
                 host_stylesheet(
                     "color: #f44747; font-family: monospace; font-size: 11px;",
-                    _native_text_style(size=11, monospace=True),
+                    f"color: #f44747; {_native_text_style(size=11, monospace=True)}",
                 )
             )
             self._status_label.setText("\u2717")
             self._status_label.setStyleSheet(
                 host_stylesheet(
                     "color: #f44747; font-size: 10px;",
-                    _native_text_style(size=10, bold=True),
+                    f"color: #f44747; {_native_text_style(size=10, bold=True)}",
                 )
             )
             self._bullet.setStyleSheet(
                 host_stylesheet(
                     "color: #f44747; font-size: 10px;",
-                    _native_text_style(size=10),
+                    "color: #f44747; font-size: 10px;",
                 )
             )
             # Auto-expand on error
@@ -672,7 +696,7 @@ class ToolCallWidget(QFrame):
             self._status_label.setStyleSheet(
                 host_stylesheet(
                     "color: #4ec9b0; font-size: 10px;",
-                    _native_text_style(size=10, bold=True),
+                    f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
                 )
             )
 
@@ -683,7 +707,7 @@ class ToolCallWidget(QFrame):
             self._status_label.setStyleSheet(
                 host_stylesheet(
                     "color: #4ec9b0; font-size: 10px;",
-                    _native_text_style(size=10, bold=True),
+                    f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
                 )
             )
 
@@ -707,6 +731,7 @@ class ToolBatchWidget(QFrame):
     def __init__(self, tool_name: str, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
+        self.setStyleSheet(_tool_card_css(object_name="message_tool"))
         self._tool_name = tool_name
         self._count = 0
         self._expanded = False
@@ -744,7 +769,7 @@ class ToolBatchWidget(QFrame):
         self._bullet.setStyleSheet(
             host_stylesheet(
                 f"color: {color}; font-size: 10px;",
-                _native_text_style(size=10),
+                f"color: {color}; {_native_text_style(size=10)}",
             )
         )
         self._bullet.setFixedWidth(14)
@@ -754,7 +779,7 @@ class ToolBatchWidget(QFrame):
         self._name_label.setStyleSheet(
             host_stylesheet(
                 f"color: {color}; font-weight: bold; font-size: 11px;",
-                _native_text_style(size=11, bold=True),
+                f"color: {color}; {_native_text_style(size=11, bold=True)}",
             )
         )
         header_layout.addWidget(self._name_label)
@@ -763,7 +788,7 @@ class ToolBatchWidget(QFrame):
         self._count_label.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 11px; margin-left: 6px;",
-                _native_text_style(size=11),
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11)}",
             )
         )
         header_layout.addWidget(self._count_label, 1)
@@ -772,7 +797,7 @@ class ToolBatchWidget(QFrame):
         self._status_label.setStyleSheet(
             host_stylesheet(
                 "color: #dcdcaa; font-size: 10px;",
-                _native_text_style(size=10, bold=True),
+                f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
             )
         )
         header_layout.addWidget(self._status_label)
@@ -781,7 +806,7 @@ class ToolBatchWidget(QFrame):
 
     def _build_preview(self) -> QLabel:
         """Build the preview label for the first call's args."""
-        self._preview_label = _make_preview_label()
+        self._preview_label = _make_preview_label(self)
         return self._preview_label
 
     def _build_detail_section(self) -> QWidget:
@@ -813,7 +838,7 @@ class ToolBatchWidget(QFrame):
         entry.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-family: monospace; font-size: 10px;",
-                _native_text_style(size=10, monospace=True),
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10, monospace=True)}",
             )
         )
         entry.setWordWrap(True)
@@ -859,7 +884,7 @@ class ToolBatchWidget(QFrame):
                 self._status_label.setStyleSheet(
                     host_stylesheet(
                         "color: #f44747; font-size: 10px;",
-                        _native_text_style(size=10, bold=True),
+                        f"color: #f44747; {_native_text_style(size=10, bold=True)}",
                     )
                 )
             else:
@@ -867,7 +892,7 @@ class ToolBatchWidget(QFrame):
                 self._status_label.setStyleSheet(
                     host_stylesheet(
                         "color: #4ec9b0; font-size: 10px;",
-                        _native_text_style(size=10, bold=True),
+                        f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
                     )
                 )
         else:
@@ -899,6 +924,7 @@ class ToolGroupWidget(QFrame):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_tool")
+        self.setStyleSheet(_tool_card_css(object_name="message_tool"))
         self._expanded = False
         self._count = 0
         self._done = 0
@@ -925,7 +951,7 @@ class ToolGroupWidget(QFrame):
         self._label.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 11px; font-weight: bold;",
-                _native_text_style(size=11, bold=True),
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=11, bold=True)}",
             )
         )
         header_layout.addWidget(self._label, 1)
@@ -934,7 +960,7 @@ class ToolGroupWidget(QFrame):
         self._status_label.setStyleSheet(
             host_stylesheet(
                 "color: #dcdcaa; font-size: 10px;",
-                _native_text_style(size=10, bold=True),
+                f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
             )
         )
         header_layout.addWidget(self._status_label)
@@ -974,7 +1000,7 @@ class ToolGroupWidget(QFrame):
                 self._status_label.setStyleSheet(
                     host_stylesheet(
                         "color: #f44747; font-size: 10px;",
-                        _native_text_style(size=10, bold=True),
+                        f"color: #f44747; {_native_text_style(size=10, bold=True)}",
                     )
                 )
             else:
@@ -982,7 +1008,7 @@ class ToolGroupWidget(QFrame):
                 self._status_label.setStyleSheet(
                     host_stylesheet(
                         "color: #4ec9b0; font-size: 10px;",
-                        _native_text_style(size=10, bold=True),
+                        f"color: #4ec9b0; {_native_text_style(size=10, bold=True)}",
                     )
                 )
         else:
@@ -990,7 +1016,7 @@ class ToolGroupWidget(QFrame):
             self._status_label.setStyleSheet(
                 host_stylesheet(
                     "color: #dcdcaa; font-size: 10px;",
-                    _native_text_style(size=10, bold=True),
+                    f"color: #dcdcaa; {_native_text_style(size=10, bold=True)}",
                 )
             )
 
@@ -1137,7 +1163,12 @@ class ToolApprovalWidget(QFrame):
         self.setStyleSheet(
             host_stylesheet(
                 "QFrame#message_question { border: 1px solid #dcdcaa; border-radius: 6px; background: #2d2d1e; }",
-                "QFrame#message_question { background: transparent; border: none; }",
+                _tool_card_css(
+                    parent or self,
+                    accent="#dcdcaa",
+                    background="#2d2d1e",
+                    object_name="message_question",
+                ),
             )
         )
         self._tool_call_id = tool_call_id
@@ -1149,7 +1180,7 @@ class ToolApprovalWidget(QFrame):
         self._header.setStyleSheet(
             host_stylesheet(
                 "color: #dcdcaa; font-weight: bold; font-size: 11px;",
-                _native_text_style(size=11, bold=True),
+                f"color: #dcdcaa; {_native_text_style(size=11, bold=True)}",
             )
         )
         layout.addWidget(self._header)
@@ -1161,7 +1192,7 @@ class ToolApprovalWidget(QFrame):
         self._info.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 10px;",
-                _native_text_style(size=10),
+                f"color: {_MUTED_TEXT}; {_native_text_style(size=10)}",
             )
         )
         layout.addWidget(self._info)
@@ -1220,36 +1251,39 @@ class ToolApprovalWidget(QFrame):
 
         self._allow_btn = QToolButton()
         self._allow_btn.setText("  Allow  ")
+        allow_css = (
+            "QToolButton { background: #2ea043; color: #ffffff; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
+            "QToolButton:hover { background: #3fb950; }"
+        )
         self._allow_btn.setStyleSheet(
-            host_stylesheet(
-                "QToolButton { background: #2ea043; color: #ffffff; border: none; "
-                "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
-                "QToolButton:hover { background: #3fb950; }"
-            )
+            host_stylesheet(allow_css, allow_css)
         )
         self._allow_btn.clicked.connect(self._on_allow)
         btn_layout.addWidget(self._allow_btn)
 
         self._always_btn = QToolButton()
         self._always_btn.setText("  Always Allow  ")
+        always_css = (
+            "QToolButton { background: #1a5c2d; color: #ffffff; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
+            "QToolButton:hover { background: #2ea043; }"
+        )
         self._always_btn.setStyleSheet(
-            host_stylesheet(
-                "QToolButton { background: #1a5c2d; color: #ffffff; border: none; "
-                "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
-                "QToolButton:hover { background: #2ea043; }"
-            )
+            host_stylesheet(always_css, always_css)
         )
         self._always_btn.clicked.connect(self._on_always_allow)
         btn_layout.addWidget(self._always_btn)
 
         self._deny_btn = QToolButton()
         self._deny_btn.setText("  Deny  ")
+        deny_css = (
+            "QToolButton { background: #c42b1c; color: #ffffff; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
+            "QToolButton:hover { background: #e04030; }"
+        )
         self._deny_btn.setStyleSheet(
-            host_stylesheet(
-                "QToolButton { background: #c42b1c; color: #ffffff; border: none; "
-                "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
-                "QToolButton:hover { background: #e04030; }"
-            )
+            host_stylesheet(deny_css, deny_css)
         )
         self._deny_btn.clicked.connect(self._on_deny)
         btn_layout.addWidget(self._deny_btn)
@@ -1265,11 +1299,12 @@ class ToolApprovalWidget(QFrame):
     def _on_allow(self):
         self._disable_buttons()
         self._allow_btn.setText("  Allowed  ")
+        allowed_css = (
+            "QToolButton { background: #1a5c2d; color: #808080; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
+        )
         self._allow_btn.setStyleSheet(
-            host_stylesheet(
-                "QToolButton { background: #1a5c2d; color: #808080; border: none; "
-                "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
-            )
+            host_stylesheet(allowed_css, allowed_css)
         )
         if self._approved_callback is not None:
             self._approved_callback(self._tool_call_id, "allow")
@@ -1277,11 +1312,12 @@ class ToolApprovalWidget(QFrame):
     def _on_always_allow(self):
         self._disable_buttons()
         self._always_btn.setText("  Always Allowed  ")
+        always_allowed_css = (
+            "QToolButton { background: #1a5c2d; color: #808080; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
+        )
         self._always_btn.setStyleSheet(
-            host_stylesheet(
-                "QToolButton { background: #1a5c2d; color: #808080; border: none; "
-                "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
-            )
+            host_stylesheet(always_allowed_css, always_allowed_css)
         )
         if self._approved_callback is not None:
             self._approved_callback(self._tool_call_id, "allow_all")
@@ -1289,11 +1325,12 @@ class ToolApprovalWidget(QFrame):
     def _on_deny(self):
         self._disable_buttons()
         self._deny_btn.setText("  Denied  ")
+        denied_css = (
+            "QToolButton { background: #6e1a12; color: #808080; border: none; "
+            "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
+        )
         self._deny_btn.setStyleSheet(
-            host_stylesheet(
-                "QToolButton { background: #6e1a12; color: #808080; border: none; "
-                "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
-            )
+            host_stylesheet(denied_css, denied_css)
         )
         if self._approved_callback is not None:
             self._approved_callback(self._tool_call_id, "deny")
