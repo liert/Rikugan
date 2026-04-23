@@ -145,11 +145,9 @@ class RikuganPlugin(idaapi.plugin_t):
 
     def _load_translator(self):
         translator = QTranslator()
-        # 假设翻译文件放在插件同级的 translations/zh_CN.qm
-        qm_path = os.path.join(os.path.dirname(__file__), "rikugan/translations", "zh_CN.qm")
+        qm_path = os.path.join(os.path.dirname(__file__), "rikugan", "translations", "zh_CN.qm")
 
         if translator.load(qm_path):
-            # IDA 使用唯一的 QApplication 实例
             app = QApplication.instance()
             app.installTranslator(translator)
             _log(f"已加载翻译文件: {qm_path}\n")
