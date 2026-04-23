@@ -6,9 +6,12 @@ All rikugan.* imports are deferred to avoid crashes during plugin enumeration.
 
 import builtins
 import importlib
+import os
 import threading
 
 import idaapi
+
+from .rikugan.ui.qt_compat import QApplication, QTranslator
 
 # ---------------------------------------------------------------------------
 # Shiboken __import__ hook re-entrancy guard
@@ -135,9 +138,23 @@ class RikuganPlugin(idaapi.plugin_t):
     wanted_hotkey = "Ctrl+Shift+I"
 
     def init(self) -> idaapi.plugmod_t:
+        self._load_translator()
         _ver = importlib.import_module("rikugan.constants").PLUGIN_VERSION
         idaapi.msg(f"[Rikugan] Plugin loaded (v{_ver})\n")
         return RikuganPlugmod()
+
+    def _load_translator(self):
+        translator = QTranslator()
+        # 假设翻译文件放在插件同级的 translations/zh_CN.qm
+        qm_path = os.path.join(os.path.dirname(__file__), "translations", "zh_CN.qm")
+
+        if translator.load(qm_path):
+            # IDA 使用唯一的 QApplication 实例
+            app = QApplication.instance()
+            app.installTranslator(translator)
+            _log(f"已加载翻译文件: {qm_path}\n")
+        else:
+            _log(f"未找到翻译文件: {qm_path}\n")
 
 
 def _log(msg: str) -> None:

@@ -60,7 +60,7 @@ QT_BINDING: str = _detect_binding()
 # ---------------------------------------------------------------------------
 
 if QT_BINDING == "PySide6":
-    from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+    from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, QCoreApplication, QTranslator
     from PySide6.QtGui import (
         QColor,
         QFont,
