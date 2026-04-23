@@ -21,6 +21,7 @@ from ...ui.action_handlers import (
     handle_vuln_audit,
     handle_xref_analysis,
 )
+from ...ui.qt_compat import QCoreApplication
 
 try:
     ida_funcs = importlib.import_module("ida_funcs")
@@ -163,7 +164,7 @@ if _HAS_IDA:
     _ACTION_DEFS: list[tuple[str, str, Callable, bool, str, str, set[str]]] = [
         (
             "rikugan:send_to",
-            "Send to Rikugan",
+            QCoreApplication.translate("MainWindow", "Send to Rikugan"),
             _handle_send_to,
             False,
             "Ctrl+Shift+A",
