@@ -144,12 +144,12 @@ class RikuganPlugin(idaapi.plugin_t):
         return RikuganPlugmod()
 
     def _load_translator(self):
-        translator = QTranslator()
+        self.translator = QTranslator()
         qm_path = os.path.join(os.path.dirname(__file__), "rikugan", "translations", "zh_CN.qm")
 
-        if translator.load(qm_path):
+        if self.translator.load(qm_path):
             app = QApplication.instance()
-            app.installTranslator(translator)
+            app.installTranslator(self.translator)
             _log(f"已加载翻译文件: {qm_path}\n")
         else:
             _log(f"未找到翻译文件: {qm_path}\n")
