@@ -164,7 +164,7 @@ if _HAS_IDA:
     _ACTION_DEFS: list[tuple[str, str, Callable, bool, str, str, set[str]]] = [
         (
             "rikugan:send_to",
-            QCoreApplication.translate("MainWindow", "Send to Rikugan"),
+            "Send to Rikugan",
             _handle_send_to,
             False,
             "Ctrl+Shift+A",
@@ -284,7 +284,7 @@ if _HAS_IDA:
             ) in _ACTION_DEFS:
                 desc = idaapi.action_desc_t(
                     action_id,
-                    label,
+                    QCoreApplication.translate("MainWindow", label),
                     _RikuganAction(self._get_panel, handler_fn, auto_submit),
                     hotkey,
                     tooltip,
