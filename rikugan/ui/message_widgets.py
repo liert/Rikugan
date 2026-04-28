@@ -349,7 +349,9 @@ class AssistantMessageWidget(QFrame):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_assistant")
-        self._full_text = ""
+        # self._full_text = ""
+        self._content_text = ""  # 存储普通的 content
+        self._reasoning_text = ""  # 存储独立的 reasoning_content
         self._pending_delta = 0
 
         layout = QVBoxLayout(self)
@@ -395,13 +397,15 @@ class AssistantMessageWidget(QFrame):
         layout.addWidget(self._content)
 
     def _render(self) -> None:
-        thinking, visible = _split_thinking(self._full_text)
-        if thinking:
-            in_progress = "<think>" in self._full_text and "</think>" not in self._full_text
-            self._thinking_block.set_thinking(thinking, in_progress=in_progress)
+        if self._reasoning_text:
+            # 如果 reasoning_text 不为空，则显示思考块
+            # 你可以根据是否还有新的增量来决定 in_progress 状态
+            self._thinking_block.show()
+            self._thinking_block.set_thinking(self._reasoning_text, in_progress=True)
         else:
             self._thinking_block.hide()
-        self._content.setText(md_to_html(visible, self))
+
+        self._content.setText(md_to_html(self._reasoning_text, self))
         self._pending_delta = 0
 
     def append_text(self, delta: str) -> None:
@@ -410,12 +414,20 @@ class AssistantMessageWidget(QFrame):
         if self._pending_delta >= self._RENDER_BATCH:
             self._render()
 
-    def set_text(self, text: str) -> None:
-        self._full_text = text
+    def set_content(self, content: str) -> None:
+        self._full_text = content
         self._render()
 
-    def full_text(self) -> str:
-        return self._full_text
+    def set_reasoning(self, reasoning: str) -> None:
+        self._reasoning_text = reasoning
+        self._render()
+
+    # def set_text(self, text: str) -> None:
+    #     self._full_text = text
+    #     self._render()
+
+    # def full_text(self) -> str:
+    #     return self._full_text
 
 
 # ---------------------------------------------------------------------------

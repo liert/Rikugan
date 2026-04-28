@@ -265,7 +265,7 @@ class ChatView(QScrollArea):
             self._scroll_to_bottom()
         else:  # TEXT_DONE
             if self._current_assistant is not None:
-                self._current_assistant.set_text(event.text)
+                self._current_assistant.set_content(event.text)
             self._current_assistant = None
 
     def _handle_tool_event(self, event: TurnEvent) -> None:
@@ -454,7 +454,12 @@ class ChatView(QScrollArea):
                 self._reset_tool_run()
                 if msg.content:
                     w = AssistantMessageWidget(parent=self._container)
-                    w.set_text(msg.content)
+                    w.set_content(msg.content)
+                    self._insert_widget(w)
+
+                if msg.reasoning_content:
+                    w = AssistantMessageWidget(parent=self._container)
+                    w.set_reasoning(msg.reasoning_content)
                     self._insert_widget(w)
 
                 for tc in msg.tool_calls:
