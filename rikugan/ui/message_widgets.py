@@ -6,6 +6,8 @@ import random
 import re as _re
 from typing import ClassVar
 
+from openai.resources.skills.versions import content
+
 from .markdown import md_to_html
 from .qt_compat import (
     QFrame,
