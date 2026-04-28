@@ -57,10 +57,10 @@ def handle_deobfuscate(ctx: dict[str, Any], *, optimizer_term: str = "IL") -> st
 def handle_vuln_audit(ctx: dict[str, Any]) -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Audit the function {name} at 0x{ea:x} for security vulnerabilities. "
-        "Check for buffer overflows, format strings, integer overflows, "
-        "use-after-free, command injection, and other memory-safety issues. "
-        "List each finding with severity and evidence."
+        f"请对位于 0x{ea:x} 的函数 {name} 进行安全漏洞审计。 "
+        "重点检查以下风险：缓冲区溢出、格式化字符串漏洞、整数溢出、 "
+        "Use-After-Free、命令注入、权限漏洞以及其他安全问题。 "
+        "请列出发现的每个漏洞，并说明其严重程度及具体的代码证据。"
     )
 
 

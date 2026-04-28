@@ -438,14 +438,13 @@ class AssistantMessageWidget(QFrame):
         layout.addWidget(self._content)
 
     def _render(self) -> None:
-        self._content.setText(md_to_html(self._content_text, self))
-
         if self._reasoning_text:
             self._thinking_block.show()
             self._thinking_block.set_thinking(self._reasoning_text, in_progress=self._preparing_thought)
         else:
             self._thinking_block.hide()
 
+        self._content.setText(md_to_html(self._content_text, self))
         self._pending_delta = 0
         self._last_render_time = _time.monotonic()
         self._content.pin_height()
@@ -456,18 +455,35 @@ class AssistantMessageWidget(QFrame):
             self._content.pin_height()
 
     def append_text(self, delta: str) -> None:
-        if delta == "<think>":
+        if "<think>" in delta:
+            parts = delta.split("<think>", 1)
+            if parts[0]:
+                self._content_text += parts[0]
+
             self._render()
             self._preparing_thought = True
+
+            if parts[1]:
+                self.append_text(parts[1])
             return
-        if delta.startswith("</think>"):
-            self._render()
+
+        if "</think>" in delta:
+            parts = delta.split("</think>", 1)
+            if parts[0]:
+                self._reasoning_text += parts[0]
+
+            self._render()  # 渲染思考结果
             self._preparing_thought = False
+
+            if parts[1]:
+                self.append_text(parts[1])
             return
+
         if self._preparing_thought:
             self._reasoning_text += delta
         else:
             self._content_text += delta
+
         self._pending_delta += len(delta)
         # Unconditional flush for very large bursts (prevents queue build-up).
         if self._pending_delta >= self._RENDER_BATCH_MAX:
