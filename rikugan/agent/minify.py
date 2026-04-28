@@ -43,6 +43,8 @@ def minify_messages(messages: list[Message]) -> list[Message]:
         m = copy(msg)
         if m.content:
             m.content = minify_text(m.content)
+        if m.reasoning_content:
+            m.reasoning_content = minify_text(m.reasoning_content)
         if m.tool_results:
             m.tool_results = [
                 ToolResult(
