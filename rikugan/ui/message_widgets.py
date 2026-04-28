@@ -398,9 +398,7 @@ class AssistantMessageWidget(QFrame):
         layout.addWidget(self._content)
 
     def _render(self) -> None:
-        if self._reasoning_text:
-            # 如果 reasoning_text 不为空，则显示思考块
-            # 你可以根据是否还有新的增量来决定 in_progress 状态
+        if self._reasoning_text and self._preparing_thought:
             self._thinking_block.show()
             self._thinking_block.set_thinking(self._reasoning_text, in_progress=True)
         else:
@@ -411,9 +409,11 @@ class AssistantMessageWidget(QFrame):
 
     def append_text(self, delta: str) -> None:
         if delta == "<think>":
+            self._render()
             self._preparing_thought = True
             return
         if delta.startswith("</think>"):
+            self._render()
             self._preparing_thought = False
             return
         if self._preparing_thought:
