@@ -910,8 +910,6 @@ class AgentLoop:
         # Do not emit a pre-stream estimate — it causes the display to jump
         # to an estimated value only to be overwritten by real data moments later.
 
-        print(provider_messages)
-
         stream = self.provider.chat_stream(
             messages=provider_messages,
             tools=tools_schema if tools_schema else None,
