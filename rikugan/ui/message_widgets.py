@@ -398,13 +398,14 @@ class AssistantMessageWidget(QFrame):
         layout.addWidget(self._content)
 
     def _render(self) -> None:
-        if self._reasoning_text and self._preparing_thought:
+        self._content.setText(md_to_html(self._content_text, self))
+
+        if self._reasoning_text:
             self._thinking_block.show()
-            self._thinking_block.set_thinking(self._reasoning_text, in_progress=True)
+            self._thinking_block.set_thinking(self._reasoning_text, in_progress=self._preparing_thought)
         else:
             self._thinking_block.hide()
 
-        self._content.setText(md_to_html(self._reasoning_text, self))
         self._pending_delta = 0
 
     def append_text(self, delta: str) -> None:
