@@ -228,13 +228,13 @@ def quote_untrusted(content: str, label: str, max_length: int = 0) -> str:
 # Maximum characters for a single tool result before truncation.
 # Most tool results are well under this; the limit primarily catches
 # pathological cases (e.g. huge string dumps, full disassembly).
-TOOL_RESULT_MAX_CHARS = 50_000
+TOOL_RESULT_MAX_CHARS = 200_000
 
 # Maximum characters for a single binary data item (string, function name).
 BINARY_DATA_MAX_CHARS = 2_000
 
 # Maximum characters for MCP external tool results.
-MCP_RESULT_MAX_CHARS = 30_000
+MCP_RESULT_MAX_CHARS = 200_000
 
 # Maximum characters for persistent memory content.
 MEMORY_MAX_CHARS = 20_000
