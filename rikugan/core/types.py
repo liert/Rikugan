@@ -53,6 +53,7 @@ class TokenUsage:
 class Message:
     role: Role
     content: str = ""
+    reasoning_content: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_results: list[ToolResult] = field(default_factory=list)
     tool_call_id: str | None = None
@@ -72,6 +73,8 @@ class Message:
         }
         if self.content:
             d["content"] = self.content
+        if self.reasoning_content:
+            d["reasoning_content"] = self.reasoning_content
         if self.tool_calls:
             d["tool_calls"] = [{"id": tc.id, "name": tc.name, "arguments": tc.arguments} for tc in self.tool_calls]
         if self.tool_call_id:
@@ -125,6 +128,7 @@ class Message:
         return cls(
             role=Role(d["role"]),
             content=d.get("content", ""),
+            reasoning_content=d.get("reasoning_content", ""),
             tool_calls=tool_calls,
             tool_results=tool_results,
             tool_call_id=d.get("tool_call_id"),
