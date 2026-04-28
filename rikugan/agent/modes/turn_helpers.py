@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as _re
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -40,9 +41,20 @@ def build_assistant_message(
     raw_parts: list | None,
 ) -> Message:
     """Build an assistant Message, attaching raw_parts if present."""
+    _THINK_RE = _re.compile(r"<think>(.*?)</think>", _re.DOTALL)
+
+    match = _THINK_RE.search(assistant_text)
+    reasoning_content = match.group(1).strip() if match else ""
+
+    content = _THINK_RE.sub("", assistant_text, count=1).strip()
+
+    print("content:", content)
+    print("reasoning_content:", reasoning_content)
+
     msg = Message(
         role=Role.ASSISTANT,
-        content=assistant_text,
+        content=content,
+        reasoning_content=reasoning_content,
         tool_calls=tool_calls,
         token_usage=last_usage,
     )
