@@ -344,15 +344,14 @@ class AssistantMessageWidget(QFrame):
     """Displays an assistant message with streaming support and Markdown rendering."""
 
     # Larger batch = fewer re-layouts during streaming = less shaking.
-    _RENDER_BATCH = 120
+    _RENDER_BATCH = 0
 
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("message_assistant")
-        # self._full_text = ""
         self._content_text = ""  # 存储普通的 content
         self._reasoning_text = ""  # 存储独立的 reasoning_content
-        self._preparing_thought = False  # 标记是否正在准备思考内容
+        self._in_reasoning = False  # 是否正在思考
         self._pending_delta = 0
 
         layout = QVBoxLayout(self)
@@ -400,11 +399,16 @@ class AssistantMessageWidget(QFrame):
     def _render(self) -> None:
         if self._reasoning_text:
             self._thinking_block.show()
-            self._thinking_block.set_thinking(self._reasoning_text, in_progress=self._preparing_thought)
+            self._thinking_block.set_thinking(self._reasoning_text, in_progress=self._in_reasoning)
         else:
             self._thinking_block.hide()
 
-        self._content.setText(md_to_html(self._content_text, self))
+        if self._content_text:
+            self._content.show()
+            self._content.setText(md_to_html(self._content_text, self))
+        else:
+            self._content.hide()
+
         self._pending_delta = 0
 
     def append_text(self, delta: str) -> None:
@@ -414,7 +418,7 @@ class AssistantMessageWidget(QFrame):
                 self._content_text += parts[0]
 
             self._render()
-            self._preparing_thought = True
+            self._in_reasoning = True
 
             if parts[1]:
                 self.append_text(parts[1])
@@ -425,14 +429,14 @@ class AssistantMessageWidget(QFrame):
             if parts[0]:
                 self._reasoning_text += parts[0]
 
-            self._render()  # 渲染思考结果
-            self._preparing_thought = False
+            self._in_reasoning = False
+            self._render()
 
             if parts[1]:
-                self.append_text(parts[1])
+                self.append_text(parts[1].lstrip())
             return
 
-        if self._preparing_thought:
+        if self._in_reasoning:
             self._reasoning_text += delta
         else:
             self._content_text += delta
@@ -448,13 +452,6 @@ class AssistantMessageWidget(QFrame):
     def set_reasoning(self, reasoning: str) -> None:
         self._reasoning_text = reasoning
         self._render()
-
-    # def set_text(self, text: str) -> None:
-    #     self._full_text = text
-    #     self._render()
-
-    # def full_text(self) -> str:
-    #     return self._full_text
 
 
 # ---------------------------------------------------------------------------

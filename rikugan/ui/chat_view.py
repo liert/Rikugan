@@ -264,8 +264,8 @@ class ChatView(QScrollArea):
             self._current_assistant.append_text(event.text)
             self._scroll_to_bottom()
         else:  # TEXT_DONE
-            if self._current_assistant is not None:
-                self._current_assistant.set_content(event.text)
+            # if self._current_assistant is not None:
+            #     self._current_assistant.set_content(event.text)
             self._current_assistant = None
 
     def _handle_tool_event(self, event: TurnEvent) -> None:
