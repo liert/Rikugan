@@ -391,6 +391,7 @@ class AssistantMessageWidget(QFrame):
         # self._full_text = ""
         self._content_text = ""  # 存储普通的 content
         self._reasoning_text = ""  # 存储独立的 reasoning_content
+        self._preparing_thought = False  # 标记是否正在准备思考内容
         self._pending_delta = 0
         self._last_render_time: float = 0.0
 
@@ -456,7 +457,16 @@ class AssistantMessageWidget(QFrame):
             self._content.pin_height()
 
     def append_text(self, delta: str) -> None:
-        self._full_text += delta
+        if delta == "<think>":
+            self._preparing_thought = True
+            return
+        if delta.startswith("</think>"):
+            self._preparing_thought = False
+            return
+        if self._preparing_thought:
+            self._reasoning_text += delta
+        else:
+            self._content_text += delta
         self._pending_delta += len(delta)
         # Unconditional flush for very large bursts (prevents queue build-up).
         if self._pending_delta >= self._RENDER_BATCH_MAX:
@@ -472,7 +482,7 @@ class AssistantMessageWidget(QFrame):
             self._render()
 
     def set_content(self, content: str) -> None:
-        self._full_text = content
+        self._content_text = content
         self._render()
 
     def set_reasoning(self, reasoning: str) -> None:
