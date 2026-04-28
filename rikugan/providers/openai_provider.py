@@ -119,6 +119,8 @@ class OpenAIProvider(LLMProvider):
                 d: dict[str, Any] = {"role": "assistant"}
                 if msg.content:
                     d["content"] = msg.content
+                if msg.reasoning_content:
+                    d["reasoning_content"] = msg.reasoning_content
                 if msg.tool_calls:
                     d["tool_calls"] = [
                         {
@@ -168,13 +170,14 @@ class OpenAIProvider(LLMProvider):
 
         # OpenAI o-series reasoning_content
         text = rm.content or ""
-        reasoning = getattr(rm, "reasoning_content", None)
+        reasoning = getattr(rm, "reasoning_content", None) or ""
         if reasoning:
             text = f"<think>{reasoning}</think>\n{text}"
 
         return Message(
             role=Role.ASSISTANT,
             content=text,
+            reasoning_content=reasoning,
             tool_calls=tool_calls,
             token_usage=usage,
         )
