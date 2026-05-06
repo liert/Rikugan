@@ -21,6 +21,7 @@ from .message_widgets import (
 )
 from .plan_view import PlanView
 from .qt_compat import (
+    QCoreApplication,
     QScrollArea,
     QSizePolicy,
     Qt,
@@ -251,7 +252,7 @@ class ChatView(QScrollArea):
         elif etype == TurnEventType.ERROR:
             self._hide_thinking()
             self._reset_tool_run()
-            self._insert_widget(ErrorMessageWidget(event.error or "Unknown error", parent=self._container))
+            self._insert_widget(ErrorMessageWidget(event.error or QCoreApplication.translate("ChatView", "Unknown error"), parent=self._container))
             self._scroll_to_bottom()
 
     def _handle_text_event(self, event: TurnEvent) -> None:
@@ -322,7 +323,7 @@ class ChatView(QScrollArea):
         elif etype == TurnEventType.CANCELLED:
             self._hide_thinking()
             self._reset_tool_run()
-            self._insert_widget(ErrorMessageWidget("Cancelled by user", parent=self._container))
+            self._insert_widget(ErrorMessageWidget(QCoreApplication.translate("ChatView", "Cancelled by user"), parent=self._container))
             self._scroll_to_bottom()
 
     def _handle_plan_event(self, event: TurnEvent) -> None:
@@ -421,7 +422,7 @@ class ChatView(QScrollArea):
         self._hide_thinking()
         self._reset_tool_run()
         if event.type == TurnEventType.SAVE_APPROVAL_REQUEST:
-            options = ["Save All", "Discard All"]
+            options = [QCoreApplication.translate("ChatView", "Save All"), QCoreApplication.translate("ChatView", "Discard All")]
         else:  # USER_QUESTION
             options = event.metadata.get("options", [])
         widget = UserQuestionWidget(event.text, options, parent=self._container)

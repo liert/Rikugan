@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING
 
 from .qt_compat import (
+    QCoreApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -41,7 +42,7 @@ class MutationEntryWidget(QFrame):
         self._indicator.setStyleSheet(
             "color: #4ec9b0; font-size: 14px;" if record.reversible else "color: #808080; font-size: 14px;"
         )
-        self._indicator.setToolTip("Reversible" if record.reversible else "Not reversible")
+        self._indicator.setToolTip(QCoreApplication.translate("MutationEntryWidget", "Reversible") if record.reversible else QCoreApplication.translate("MutationEntryWidget", "Not reversible"))
         layout.addWidget(self._indicator)
 
         # Description
@@ -82,17 +83,17 @@ class MutationLogPanel(QFrame):
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(12, 8, 12, 8)
 
-        self._title = QLabel("Mutation Log")
+        self._title = QLabel(QCoreApplication.translate("MutationLogPanel", "Mutation Log"))
         self._title.setStyleSheet("color: #d4d4d4; font-weight: bold; font-size: 12px;")
         header_layout.addWidget(self._title)
 
-        self._count_label = QLabel("0 mutations")
+        self._count_label = QLabel(QCoreApplication.translate("MutationLogPanel", "0 mutations"))
         self._count_label.setStyleSheet("color: #808080; font-size: 11px;")
         header_layout.addWidget(self._count_label)
 
         header_layout.addStretch()
 
-        self._undo_btn = QPushButton("Undo Last")
+        self._undo_btn = QPushButton(QCoreApplication.translate("MutationLogPanel", "Undo Last"))
         self._undo_btn.setStyleSheet(
             "QPushButton { color: #4ec9b0; background: #2d2d2d; "
             "border: 1px solid #4ec9b0; border-radius: 3px; "
@@ -150,5 +151,5 @@ class MutationLogPanel(QFrame):
 
     def _update_count(self) -> None:
         n = len(self._entries)
-        self._count_label.setText(f"{n} mutation{'s' if n != 1 else ''}")
+        self._count_label.setText(QCoreApplication.translate("MutationLogPanel", "{n} mutation").format(n=n) if n == 1 else QCoreApplication.translate("MutationLogPanel", "{n} mutations").format(n=n))
         self._undo_btn.setEnabled(n > 0 and any(e.record.reversible for e in self._entries))

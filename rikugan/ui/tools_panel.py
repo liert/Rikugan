@@ -6,6 +6,7 @@ Can be shown as an independent window (QDialog) or embedded in a layout.
 from __future__ import annotations
 
 from .qt_compat import (
+    QCoreApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -58,7 +59,7 @@ class ToolsPanel(QWidget):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("tools_panel")
-        self.setWindowTitle("Rikugan Tools")
+        self.setWindowTitle(QCoreApplication.translate("ToolsPanel", "Rikugan Tools"))
         self.setStyleSheet(maybe_host_stylesheet(_PANEL_STYLE))
         # No minimum size — this widget is embedded in IDA dockable forms
         # and Binary Ninja sidebars, which can be any size.
@@ -73,7 +74,7 @@ class ToolsPanel(QWidget):
         header_layout = QHBoxLayout(self._header)
         header_layout.setContentsMargins(12, 8, 12, 8)
 
-        title = QLabel("Tools")
+        title = QLabel(QCoreApplication.translate("ToolsPanel", "Tools"))
         title.setStyleSheet(maybe_host_stylesheet(_HEADER_STYLE))
         header_layout.addWidget(title)
         header_layout.addStretch()
@@ -85,15 +86,15 @@ class ToolsPanel(QWidget):
         self._tabs.setObjectName("tools_tabs")
 
         # Placeholder tabs
-        self._renamer_placeholder = QLabel("Not loaded")
+        self._renamer_placeholder = QLabel(QCoreApplication.translate("ToolsPanel", "Not loaded"))
         self._renamer_placeholder.setStyleSheet(maybe_host_stylesheet("color: #808080; padding: 20px;"))
         self._renamer_placeholder.setWordWrap(True)
-        self._tabs.addTab(self._renamer_placeholder, "Renamer")
+        self._tabs.addTab(self._renamer_placeholder, QCoreApplication.translate("ToolsPanel", "Renamer"))
 
-        self._agents_placeholder = QLabel("Not loaded")
+        self._agents_placeholder = QLabel(QCoreApplication.translate("ToolsPanel", "Not loaded"))
         self._agents_placeholder.setStyleSheet(maybe_host_stylesheet("color: #808080; padding: 20px;"))
         self._agents_placeholder.setWordWrap(True)
-        self._tabs.addTab(self._agents_placeholder, "Agents")
+        self._tabs.addTab(self._agents_placeholder, QCoreApplication.translate("ToolsPanel", "Agents"))
 
         main_layout.addWidget(self._tabs)
 
@@ -107,11 +108,11 @@ class ToolsPanel(QWidget):
 
     def set_renamer_widget(self, widget: QWidget) -> None:
         """Replace the Renamer tab content."""
-        self._replace_tab(0, widget, "Renamer")
+        self._replace_tab(0, widget, QCoreApplication.translate("ToolsPanel", "Renamer"))
 
     def set_agents_widget(self, widget: QWidget) -> None:
         """Replace the Agents tab content."""
-        self._replace_tab(1, widget, "Agents")
+        self._replace_tab(1, widget, QCoreApplication.translate("ToolsPanel", "Agents"))
 
     def hide_header(self) -> None:
         """Hide the title bar (used when embedded in a dockable form)."""

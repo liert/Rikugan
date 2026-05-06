@@ -22,6 +22,7 @@ from .input_area import InputArea
 from .mutation_log_view import MutationLogPanel
 from .qt_compat import (
     QCheckBox,
+    QCoreApplication,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -211,8 +212,8 @@ class _AddButtonTabBar(QTabBar):
         if index < 0:
             return
         menu = QMenu(self)
-        export_action = menu.addAction("Export Chat")
-        fork_action = menu.addAction("Fork Session")
+        export_action = menu.addAction(QCoreApplication.translate("_AddButtonTabBar", "Export Chat"))
+        fork_action = menu.addAction(QCoreApplication.translate("_AddButtonTabBar", "Fork Session"))
         action = qt_run(menu, self.mapToGlobal(pos))
         if action == export_action and self._export_tab_callback is not None:
             self._export_tab_callback(index)
@@ -297,13 +298,13 @@ class RikuganPanelCore(QWidget):
 
         for _attempt in range(3):
             dlg = QDialog()
-            dlg.setWindowTitle("Rikugan — Encrypted API Keys")
+            dlg.setWindowTitle(QCoreApplication.translate("RikuganPanelCore", "Rikugan — Encrypted API Keys"))
             dlg.setMinimumWidth(350)
             layout = QVBoxLayout(dlg)
-            layout.addWidget(QLabel("Enter password to decrypt API keys:"))
+            layout.addWidget(QLabel(QCoreApplication.translate("RikuganPanelCore", "Enter password to decrypt API keys:")))
             pw_edit = QLineEdit()
             pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
-            pw_edit.setPlaceholderText("Password")
+            pw_edit.setPlaceholderText(QCoreApplication.translate("RikuganPanelCore", "Password"))
             layout.addWidget(pw_edit)
             buttons = QDialogButtonBox(
                 qt_flags(
@@ -320,7 +321,7 @@ class RikuganPanelCore(QWidget):
             if self._config.decrypt_stored_keys(pw_edit.text()):
                 log_debug("API keys decrypted successfully")
                 return
-            QMessageBox.warning(None, "Wrong Password", "Incorrect password. Please try again.")
+            QMessageBox.warning(None, QCoreApplication.translate("RikuganPanelCore", "Wrong Password"), QCoreApplication.translate("RikuganPanelCore", "Incorrect password. Please try again."))
         log_debug("API key decryption skipped or failed — keys will be empty")
 
     def _check_oauth_consent(self) -> None:
@@ -391,8 +392,8 @@ class RikuganPanelCore(QWidget):
         self._mode_bar.setStyleSheet("" if self._use_native_host_theme else self._MODE_BAR_STYLE)
         self._mode_bar.setExpanding(False)
         self._mode_bar.setDrawBase(False)
-        self._mode_bar.addTab("Chat")
-        self._mode_bar.addTab("Tools")
+        self._mode_bar.addTab(QCoreApplication.translate("RikuganPanelCore", "Chat"))
+        self._mode_bar.addTab(QCoreApplication.translate("RikuganPanelCore", "Tools"))
         self._mode_bar.currentChanged.connect(self._on_mode_changed)
         if self._tools_form_factory is not None:
             self._mode_bar.setVisible(False)
@@ -413,7 +414,7 @@ class RikuganPanelCore(QWidget):
             )
         )
         if self._dependency_warnings:
-            self._dependency_banner.setText("Warnings: " + " ".join(self._dependency_warnings))
+            self._dependency_banner.setText(QCoreApplication.translate("RikuganPanelCore", "Warnings:") + " " + " ".join(self._dependency_warnings))
             layout.insertWidget(1, self._dependency_banner)
         else:
             self._dependency_banner.hide()
@@ -425,7 +426,7 @@ class RikuganPanelCore(QWidget):
         chat_layout.setSpacing(0)
         self._build_tab_widget()
         self._build_main_splitter(chat_layout)
-        self._create_tab(self._ctrl.active_tab_id, "New Chat")
+        self._create_tab(self._ctrl.active_tab_id, QCoreApplication.translate("RikuganPanelCore", "New Chat"))
         chat_layout.addWidget(self._build_input_section())
         self._mode_stack.addWidget(chat_page)
 
@@ -522,35 +523,35 @@ class RikuganPanelCore(QWidget):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(4)
 
-        self._send_btn = QPushButton("Send")
+        self._send_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "Send"))
         self._send_btn.setObjectName("send_button")
         self._send_btn.setFixedWidth(64)
         self._send_btn.setStyleSheet(maybe_host_stylesheet(_SMALL_BTN_STYLE))
         self._send_btn.clicked.connect(self._on_send_clicked)
         btn_layout.addWidget(self._send_btn)
-        self._cancel_btn = QPushButton("Stop")
+        self._cancel_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "Stop"))
         self._cancel_btn.setObjectName("cancel_button")
         self._cancel_btn.setFixedWidth(64)
         self._cancel_btn.setStyleSheet(maybe_host_stylesheet(_CANCEL_BTN_STYLE))
         self._cancel_btn.setVisible(False)
         self._cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self._cancel_btn)
-        self._new_btn = QPushButton("New")
+        self._new_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "New"))
         self._new_btn.setFixedWidth(64)
         self._new_btn.setStyleSheet(maybe_host_stylesheet(_SMALL_BTN_STYLE))
         self._new_btn.clicked.connect(self._on_new_tab)
         btn_layout.addWidget(self._new_btn)
-        self._export_btn = QPushButton("Export")
+        self._export_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "Export"))
         self._export_btn.setFixedWidth(64)
         self._export_btn.setStyleSheet(maybe_host_stylesheet(_SMALL_BTN_STYLE))
         self._export_btn.clicked.connect(self._on_export_current)
         btn_layout.addWidget(self._export_btn)
-        self._settings_btn = QPushButton("Settings")
+        self._settings_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "Settings"))
         self._settings_btn.setFixedWidth(64)
         self._settings_btn.setStyleSheet(maybe_host_stylesheet(_SMALL_BTN_STYLE))
         self._settings_btn.clicked.connect(self._on_settings)
         btn_layout.addWidget(self._settings_btn)
-        self._mutations_btn = QPushButton("Mutations")
+        self._mutations_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "Mutations"))
         self._mutations_btn.setFixedWidth(64)
         self._mutations_btn.setStyleSheet(maybe_host_stylesheet(_SMALL_BTN_STYLE))
         self._mutations_btn.setCheckable(True)
@@ -558,7 +559,7 @@ class RikuganPanelCore(QWidget):
         self._mutations_btn.setVisible(False)  # shown when first mutation is recorded
         btn_layout.addWidget(self._mutations_btn)
 
-        self._tools_btn = QPushButton("Tools")
+        self._tools_btn = QPushButton(QCoreApplication.translate("RikuganPanelCore", "Tools"))
         self._tools_btn.setFixedWidth(64)
         self._tools_btn.setStyleSheet(maybe_host_stylesheet(_SMALL_BTN_STYLE))
         self._tools_btn.setCheckable(True)
@@ -625,7 +626,7 @@ class RikuganPanelCore(QWidget):
                 return
             # "yes" — fall through to create a new tab
         tab_id = self._ctrl.create_tab()
-        self._create_tab(tab_id, "New Chat")
+        self._create_tab(tab_id, QCoreApplication.translate("RikuganPanelCore", "New Chat"))
         self._ctrl.switch_tab(tab_id)
 
     def _on_fork_tab(self, index: int) -> None:
@@ -637,7 +638,7 @@ class RikuganPanelCore(QWidget):
         if new_tab_id is None:
             return
         label = self._ctrl.tab_label(new_tab_id)
-        chat_view = self._create_tab(new_tab_id, f"{label} (fork)")
+        chat_view = self._create_tab(new_tab_id, QCoreApplication.translate("RikuganPanelCore", "{label} (fork)").format(label=label))
         # Restore messages into the forked chat view
         source_session = self._ctrl.get_session(new_tab_id)
         if source_session and source_session.messages:
@@ -673,7 +674,7 @@ class RikuganPanelCore(QWidget):
         include_subagents = False
         if session.subagent_logs:
             dlg = QDialog(self)
-            dlg.setWindowTitle("Export Options")
+            dlg.setWindowTitle(QCoreApplication.translate("RikuganPanelCore", "Export Options"))
             dlg.setStyleSheet(
                 maybe_host_stylesheet(
                     "QDialog { background: #1e1e1e; }"
@@ -682,7 +683,7 @@ class RikuganPanelCore(QWidget):
                 )
             )
             layout = QVBoxLayout(dlg)
-            cb = QCheckBox(f"Include subagent logs ({len(session.subagent_logs)} subagent runs)")
+            cb = QCheckBox(QCoreApplication.translate("RikuganPanelCore", "Include subagent logs ({count} subagent runs)").format(count=len(session.subagent_logs)))
             cb.setChecked(True)
             layout.addWidget(cb)
             buttons = QDialogButtonBox(
@@ -702,9 +703,9 @@ class RikuganPanelCore(QWidget):
         default_name = f"rikugan-{label}-{time.strftime('%Y%m%d-%H%M%S')}.md"
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export Chat",
+            QCoreApplication.translate("RikuganPanelCore", "Export Chat"),
             default_name,
-            "Markdown (*.md);;Text (*.txt);;All Files (*)",
+            QCoreApplication.translate("RikuganPanelCore", "Markdown (*.md);;Text (*.txt);;All Files (*)"),
         )
         if not path:
             return
@@ -898,7 +899,7 @@ class RikuganPanelCore(QWidget):
         self._chat_views.clear()
         self._pending_restore_messages.clear()
         # Create default tab and try to restore saved sessions
-        self._create_tab(self._ctrl.active_tab_id, "New Chat")
+        self._create_tab(self._ctrl.active_tab_id, QCoreApplication.translate("RikuganPanelCore", "New Chat"))
         self._try_restore_session()
 
     def _on_submit(self, text: str) -> None:
@@ -967,9 +968,9 @@ class RikuganPanelCore(QWidget):
     def _show_new_chat_dialog(self, context_pct: int) -> str:
         """Show a confirmation dialog with context usage. Returns 'yes', 'clear', or 'no'."""
         dlg = QMessageBox(self)
-        dlg.setWindowTitle("New Chat")
-        dlg.setText("Start a new chat? Current conversation will be saved.")
-        dlg.setInformativeText(f"Context usage: {context_pct}%")
+        dlg.setWindowTitle(QCoreApplication.translate("RikuganPanelCore", "New Chat"))
+        dlg.setText(QCoreApplication.translate("RikuganPanelCore", "Start a new chat? Current conversation will be saved."))
+        dlg.setInformativeText(QCoreApplication.translate("RikuganPanelCore", "Context usage: {pct}%").format(pct=context_pct))
         dlg.setStyleSheet(
             maybe_host_stylesheet(
                 "QMessageBox { background: #1e1e1e; color: #d4d4d4; }"
@@ -979,12 +980,12 @@ class RikuganPanelCore(QWidget):
                 "QPushButton:hover { background: #3c3c3c; }"
             )
         )
-        yes_btn = dlg.addButton("Yes", QMessageBox.ButtonRole.AcceptRole)
+        yes_btn = dlg.addButton(QCoreApplication.translate("RikuganPanelCore", "Yes"), QMessageBox.ButtonRole.AcceptRole)
         clear_btn = dlg.addButton(
-            f"Yes, clear context ({context_pct}% used)",
+            QCoreApplication.translate("RikuganPanelCore", "Yes, clear context ({pct}% used)").format(pct=context_pct),
             QMessageBox.ButtonRole.AcceptRole,
         )
-        no_btn = dlg.addButton("No", QMessageBox.ButtonRole.RejectRole)
+        no_btn = dlg.addButton(QCoreApplication.translate("RikuganPanelCore", "No"), QMessageBox.ButtonRole.RejectRole)
         dlg.setDefaultButton(no_btn)
         qt_run(dlg)
         clicked = dlg.clickedButton()
@@ -1576,17 +1577,17 @@ class RikuganPanelCore(QWidget):
         # running — UNLESS we're waiting for a button-only approval.
         if self._awaiting_button_approval:
             self._input_area.set_enabled(False)
-            self._input_area.setPlaceholderText("Use the Approve/Reject buttons above to continue.")
+            self._input_area.setPlaceholderText(QCoreApplication.translate("RikuganPanelCore", "Use the Approve/Reject buttons above to continue."))
         else:
             self._input_area.set_enabled(True)
             if running:
                 self._input_area.setPlaceholderText(
-                    "Rikugan is thinking... press Enter (or Queue) to queue a follow-up."
+                    QCoreApplication.translate("RikuganPanelCore", "Rikugan is thinking... press Enter (or Queue) to queue a follow-up.")
                 )
             else:
-                self._input_area.setPlaceholderText("Ask about this binary... (/ for skills, /modify to patch)")
+                self._input_area.setPlaceholderText(QCoreApplication.translate("RikuganPanelCore", "Ask about this binary... (/ for skills, /modify to patch)"))
 
         self._send_btn.setVisible(True)
         self._send_btn.setEnabled(not self._awaiting_button_approval)
-        self._send_btn.setText("Queue" if running else "Send")
+        self._send_btn.setText(QCoreApplication.translate("RikuganPanelCore", "Queue") if running else QCoreApplication.translate("RikuganPanelCore", "Send"))
         self._cancel_btn.setVisible(running)

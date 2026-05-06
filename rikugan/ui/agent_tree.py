@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from .qt_compat import (
     QAbstractItemView,
     QComboBox,
+    QCoreApplication,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -109,27 +110,27 @@ class AgentTreeWidget(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(4)
 
-        self._kill_btn = QPushButton("Kill Selected")
+        self._kill_btn = QPushButton(QCoreApplication.translate("AgentTreeWidget", "Kill Selected"))
         self._kill_btn.setStyleSheet(_BTN_STYLE)
         self._kill_btn.clicked.connect(self._on_kill_selected)
         toolbar.addWidget(self._kill_btn)
 
-        self._clean_btn = QPushButton("Clean")
+        self._clean_btn = QPushButton(QCoreApplication.translate("AgentTreeWidget", "Clean"))
         self._clean_btn.setStyleSheet(_BTN_STYLE)
-        self._clean_btn.setToolTip("Remove selected finished agents (or all finished if none selected)")
+        self._clean_btn.setToolTip(QCoreApplication.translate("AgentTreeWidget", "Remove selected finished agents (or all finished if none selected)"))
         self._clean_btn.clicked.connect(self._on_clean)
         toolbar.addWidget(self._clean_btn)
 
         self._filter_combo = QComboBox()
         self._filter_combo.setFixedWidth(130)
         self._filter_combo.setStyleSheet(_COMBO_STYLE)
-        self._filter_combo.addItems(["All Agents", "General", "Bulk Rename"])
+        self._filter_combo.addItems([QCoreApplication.translate("AgentTreeWidget", "All Agents"), QCoreApplication.translate("AgentTreeWidget", "General"), QCoreApplication.translate("AgentTreeWidget", "Bulk Rename")])
         self._filter_combo.currentTextChanged.connect(self._apply_filter)
         toolbar.addWidget(self._filter_combo)
 
         toolbar.addStretch()
 
-        self._status_label = QLabel("0 running / 0 completed")
+        self._status_label = QLabel(QCoreApplication.translate("AgentTreeWidget", "0 running / 0 completed"))
         self._status_label.setStyleSheet(_STATUS_LABEL_STYLE)
         toolbar.addWidget(self._status_label)
 
@@ -139,7 +140,7 @@ class AgentTreeWidget(QWidget):
         self._tree = QTreeWidget()
         self._tree.setObjectName("agent_tree")
         self._tree.setStyleSheet(_TREE_STYLE)
-        self._tree.setHeaderLabels(["Name", "Type", "Status", "Turns", "Time"])
+        self._tree.setHeaderLabels([QCoreApplication.translate("AgentTreeWidget", "Name"), QCoreApplication.translate("AgentTreeWidget", "Type"), QCoreApplication.translate("AgentTreeWidget", "Status"), QCoreApplication.translate("AgentTreeWidget", "Turns"), QCoreApplication.translate("AgentTreeWidget", "Time")])
         self._tree.setColumnWidth(0, 150)
         self._tree.setColumnWidth(1, 100)
         self._tree.setColumnWidth(2, 80)
@@ -159,7 +160,7 @@ class AgentTreeWidget(QWidget):
         self._preview.setReadOnly(True)
         self._preview.setFixedHeight(80)
         self._preview.setStyleSheet(_PREVIEW_STYLE)
-        self._preview.setPlaceholderText("Select an agent to preview its output...")
+        self._preview.setPlaceholderText(QCoreApplication.translate("AgentTreeWidget", "Select an agent to preview its output..."))
         main_layout.addWidget(self._preview)
 
         # Internal agent tracking: agent_id -> AgentInfo
@@ -235,9 +236,9 @@ class AgentTreeWidget(QWidget):
 
         # Apply current category filter to this item
         filter_text = self._filter_combo.currentText()
-        if filter_text == "Bulk Rename":
+        if filter_text == QCoreApplication.translate("AgentTreeWidget", "Bulk Rename"):
             item.setHidden(info.category != "bulk_rename")
-        elif filter_text == "General":
+        elif filter_text == QCoreApplication.translate("AgentTreeWidget", "General"):
             item.setHidden(info.category == "bulk_rename")
         else:
             item.setHidden(False)
@@ -247,7 +248,7 @@ class AgentTreeWidget(QWidget):
         # Auto-update preview if this agent is selected
         selected = self._tree.selectedItems()
         if selected and selected[0].data(0, Qt.ItemDataRole.UserRole) == info.agent_id:
-            self._preview.setPlainText(info.summary or "(no output yet)")
+            self._preview.setPlainText(info.summary or QCoreApplication.translate("AgentTreeWidget", "(no output yet)"))
 
     def _apply_filter(self, _text: str = "") -> None:
         """Show/hide tree items based on the selected category filter."""
@@ -256,11 +257,11 @@ class AgentTreeWidget(QWidget):
             info = self._agents.get(agent_id)
             if info is None:
                 continue
-            if selected == "All Agents":
+            if selected == QCoreApplication.translate("AgentTreeWidget", "All Agents"):
                 item.setHidden(False)
-            elif selected == "Bulk Rename":
+            elif selected == QCoreApplication.translate("AgentTreeWidget", "Bulk Rename"):
                 item.setHidden(info.category != "bulk_rename")
-            elif selected == "General":
+            elif selected == QCoreApplication.translate("AgentTreeWidget", "General"):
                 item.setHidden(info.category == "bulk_rename")
         self._update_status_counts()
 
@@ -273,7 +274,7 @@ class AgentTreeWidget(QWidget):
         agent_id = items[0].data(0, Qt.ItemDataRole.UserRole)
         info = self._agents.get(agent_id)
         if info:
-            self._preview.setPlainText(info.summary or "(no output yet)")
+            self._preview.setPlainText(info.summary or QCoreApplication.translate("AgentTreeWidget", "(no output yet)"))
         else:
             self._preview.clear()
 
@@ -281,7 +282,7 @@ class AgentTreeWidget(QWidget):
         """Refresh the running / completed counts label."""
         running = sum(1 for a in self._agents.values() if a.status == "RUNNING")
         completed = sum(1 for a in self._agents.values() if a.status == "COMPLETED")
-        self._status_label.setText(f"{running} running / {completed} completed")
+        self._status_label.setText(QCoreApplication.translate("AgentTreeWidget", "{running} running / {completed} completed").format(running=running, completed=completed))
 
     @staticmethod
     def _format_elapsed(seconds: float) -> str:

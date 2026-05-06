@@ -8,6 +8,7 @@ from typing import ClassVar
 
 from .qt_compat import (
     QColor,
+    QCoreApplication,
     QFont,
     QFrame,
     QHBoxLayout,
@@ -201,7 +202,7 @@ def _format_tool_group_label(tool_names: list[str]) -> str:
     """Human-friendly group label for collapsed tool-call runs."""
     count = len(tool_names)
     if count <= 0:
-        return "0 tools called"
+        return QCoreApplication.translate("tool_widgets", "0 tools called")
 
     base_names = [_strip_mcp_prefix(name) for name in tool_names]
     unique_names = {name for name in base_names if name}
@@ -212,9 +213,9 @@ def _format_tool_group_label(tool_names: list[str]) -> str:
         if template:
             action, noun = template
             suffix = "" if count == 1 else "s"
-            return f"{action} {count} {noun}{suffix}"
+            return QCoreApplication.translate("tool_widgets", "{action} {count} {noun}{suffix}").format(action=action, count=count, noun=noun, suffix=suffix)
 
-    return f"{count} tool called" if count == 1 else f"{count} tools called"
+    return QCoreApplication.translate("tool_widgets", "{count} tool called").format(count=count) if count == 1 else QCoreApplication.translate("tool_widgets", "{count} tools called").format(count=count)
 
 
 # ---------------------------------------------------------------------------
@@ -595,7 +596,7 @@ class ToolCallWidget(QFrame):
         )
         self._detail_layout.addWidget(self._args_label)
 
-        self._result_header = QLabel("Result:")
+        self._result_header = QLabel(QCoreApplication.translate("ToolCallWidget", "Result:"))
         self._result_header.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 10px; font-weight: bold;",
@@ -942,7 +943,7 @@ class ToolGroupWidget(QFrame):
         self._toggle_btn.clicked.connect(self._toggle)
         header_layout.addWidget(self._toggle_btn)
 
-        self._label = QLabel("0 tools called")
+        self._label = QLabel(QCoreApplication.translate("ToolGroupWidget", "0 tools called"))
         self._label.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 11px; font-weight: bold;",
@@ -1171,7 +1172,7 @@ class ToolApprovalWidget(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
 
-        self._header = QLabel("Approve execute_python?")
+        self._header = QLabel(QCoreApplication.translate("ToolApprovalWidget", "Approve execute_python?"))
         self._header.setStyleSheet(
             host_stylesheet(
                 "color: #dcdcaa; font-weight: bold; font-size: 11px;",
@@ -1183,7 +1184,7 @@ class ToolApprovalWidget(QFrame):
         code = self._extract_code(args_text)
         code_lines = code.strip().splitlines() if code.strip() else []
 
-        self._info = QLabel(f"Python code - {len(code_lines)} line{'s' if len(code_lines) != 1 else ''}")
+        self._info = QLabel(QCoreApplication.translate("ToolApprovalWidget", "Python code - {count} line").format(count=len(code_lines)) if len(code_lines) == 1 else QCoreApplication.translate("ToolApprovalWidget", "Python code - {count} lines").format(count=len(code_lines)))
         self._info.setStyleSheet(
             host_stylesheet(
                 "color: #808080; font-size: 10px;",
@@ -1245,7 +1246,7 @@ class ToolApprovalWidget(QFrame):
         btn_layout.setSpacing(8)
 
         self._allow_btn = QToolButton()
-        self._allow_btn.setText("  Allow  ")
+        self._allow_btn.setText(QCoreApplication.translate("ToolApprovalWidget", "  Allow  "))
         allow_css = (
             "QToolButton { background: #2ea043; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
@@ -1256,7 +1257,7 @@ class ToolApprovalWidget(QFrame):
         btn_layout.addWidget(self._allow_btn)
 
         self._always_btn = QToolButton()
-        self._always_btn.setText("  Always Allow  ")
+        self._always_btn.setText(QCoreApplication.translate("ToolApprovalWidget", "  Always Allow  "))
         always_css = (
             "QToolButton { background: #1a5c2d; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
@@ -1267,7 +1268,7 @@ class ToolApprovalWidget(QFrame):
         btn_layout.addWidget(self._always_btn)
 
         self._deny_btn = QToolButton()
-        self._deny_btn.setText("  Deny  ")
+        self._deny_btn.setText(QCoreApplication.translate("ToolApprovalWidget", "  Deny  "))
         deny_css = (
             "QToolButton { background: #c42b1c; color: #ffffff; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; font-weight: bold; }"
@@ -1287,7 +1288,7 @@ class ToolApprovalWidget(QFrame):
 
     def _on_allow(self):
         self._disable_buttons()
-        self._allow_btn.setText("  Allowed  ")
+        self._allow_btn.setText(QCoreApplication.translate("ToolApprovalWidget", "  Allowed  "))
         allowed_css = (
             "QToolButton { background: #1a5c2d; color: #808080; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
@@ -1298,7 +1299,7 @@ class ToolApprovalWidget(QFrame):
 
     def _on_always_allow(self):
         self._disable_buttons()
-        self._always_btn.setText("  Always Allowed  ")
+        self._always_btn.setText(QCoreApplication.translate("ToolApprovalWidget", "  Always Allowed  "))
         always_allowed_css = (
             "QToolButton { background: #1a5c2d; color: #808080; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"
@@ -1309,7 +1310,7 @@ class ToolApprovalWidget(QFrame):
 
     def _on_deny(self):
         self._disable_buttons()
-        self._deny_btn.setText("  Denied  ")
+        self._deny_btn.setText(QCoreApplication.translate("ToolApprovalWidget", "  Denied  "))
         denied_css = (
             "QToolButton { background: #6e1a12; color: #808080; border: none; "
             "border-radius: 4px; padding: 4px 16px; font-size: 11px; }"

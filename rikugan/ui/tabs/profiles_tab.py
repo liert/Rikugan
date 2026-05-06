@@ -17,6 +17,7 @@ from ...core.profile import (
 from ..qt_compat import (
     QCheckBox,
     QComboBox,
+    QCoreApplication,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -83,7 +84,7 @@ class ProfilesTab(QWidget):
         layout.setSpacing(6)
 
         layout.addWidget(self._build_description_section())
-        self._hide_metadata_cb = QCheckBox("Hide binary metadata")
+        self._hide_metadata_cb = QCheckBox(QCoreApplication.translate("ProfilesTab", "Hide binary metadata"))
         layout.addWidget(self._hide_metadata_cb)
         layout.addWidget(self._build_ioc_filters_section())
         layout.addWidget(self._build_custom_rules_section())
@@ -97,23 +98,23 @@ class ProfilesTab(QWidget):
     def _build_profile_selector(self) -> QHBoxLayout:
         """Build the profile selector row with combo box and action buttons."""
         top_row = QHBoxLayout()
-        top_row.addWidget(QLabel("Active Profile:"))
+        top_row.addWidget(QLabel(QCoreApplication.translate("ProfilesTab", "Active Profile:")))
         self._profile_combo = QComboBox()
         self._populate_combo()
         self._profile_combo.currentTextChanged.connect(self._on_profile_changed)
         top_row.addWidget(self._profile_combo, 1)
 
-        self._new_btn = QPushButton("+ New")
+        self._new_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "+ New"))
         self._new_btn.setStyleSheet(_BTN_STYLE)
         self._new_btn.clicked.connect(self._on_new_profile)
         top_row.addWidget(self._new_btn)
 
-        self._clone_btn = QPushButton("Clone")
+        self._clone_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "Clone"))
         self._clone_btn.setStyleSheet(_BTN_STYLE)
         self._clone_btn.clicked.connect(self._on_clone_profile)
         top_row.addWidget(self._clone_btn)
 
-        self._delete_btn = QPushButton("Delete")
+        self._delete_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "Delete"))
         self._delete_btn.setStyleSheet(_BTN_STYLE)
         self._delete_btn.clicked.connect(self._on_delete_profile)
         top_row.addWidget(self._delete_btn)
@@ -122,27 +123,24 @@ class ProfilesTab(QWidget):
 
     def _build_description_section(self) -> QGroupBox:
         """Build the description group box."""
-        desc_group = QGroupBox("Description")
+        desc_group = QGroupBox(QCoreApplication.translate("ProfilesTab", "Description"))
         desc_group.setStyleSheet(_GROUP_STYLE)
         desc_lay = QVBoxLayout(desc_group)
         desc_lay.setContentsMargins(10, 16, 10, 8)
         self._desc_edit = QPlainTextEdit()
         self._desc_edit.setMaximumHeight(60)
         self._desc_edit.setPlaceholderText(
-            "Describe this profile's purpose (shown to the AI agent in the system prompt)"
+            QCoreApplication.translate("ProfilesTab", "Describe this profile's purpose (shown to the AI agent in the system prompt)")
         )
         self._desc_edit.setToolTip(
-            "This description is shown to the AI agent in the system prompt.\n"
-            "A clear description helps the agent understand and follow your\n"
-            "constraints (e.g. 'Private analysis \u2014 never leak sample hashes\n"
-            "or reference external threat intelligence')."
+            QCoreApplication.translate("ProfilesTab", "This description is shown to the AI agent in the system prompt.\nA clear description helps the agent understand and follow your\nconstraints (e.g. 'Private analysis \u2014 never leak sample hashes\nor reference external threat intelligence').")
         )
         desc_lay.addWidget(self._desc_edit)
         return desc_group
 
     def _build_ioc_filters_section(self) -> QGroupBox:
         """Build the IOC redaction filters group with select/deselect and checkbox grid."""
-        ioc_group = QGroupBox("IOC Redaction Filters")
+        ioc_group = QGroupBox(QCoreApplication.translate("ProfilesTab", "IOC Redaction Filters"))
         ioc_group.setStyleSheet(_GROUP_STYLE)
         ioc_outer = QVBoxLayout(ioc_group)
         ioc_outer.setContentsMargins(10, 20, 10, 8)
@@ -151,11 +149,11 @@ class ProfilesTab(QWidget):
         # Select All / Deselect All row
         ioc_btns = QHBoxLayout()
         ioc_btns.setSpacing(6)
-        self._ioc_select_all_btn = QPushButton("Select All")
+        self._ioc_select_all_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "Select All"))
         self._ioc_select_all_btn.setStyleSheet(_BTN_STYLE)
         self._ioc_select_all_btn.clicked.connect(self._on_ioc_select_all)
         ioc_btns.addWidget(self._ioc_select_all_btn)
-        self._ioc_deselect_btn = QPushButton("Deselect All")
+        self._ioc_deselect_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "Deselect All"))
         self._ioc_deselect_btn.setStyleSheet(_BTN_STYLE)
         self._ioc_deselect_btn.clicked.connect(self._on_ioc_deselect_all)
         ioc_btns.addWidget(self._ioc_deselect_btn)
@@ -172,7 +170,7 @@ class ProfilesTab(QWidget):
             col = QVBoxLayout()
             col.setSpacing(3)
             for key in col_keys:
-                cb = QCheckBox(IOC_FILTER_CATEGORIES[key])
+                cb = QCheckBox(QCoreApplication.translate("ProfilesTab", IOC_FILTER_CATEGORIES[key]))
                 self._ioc_checkboxes[key] = cb
                 col.addWidget(cb)
             col.addStretch()
@@ -183,7 +181,7 @@ class ProfilesTab(QWidget):
 
     def _build_custom_rules_section(self) -> QGroupBox:
         """Build the custom filter rules group with input fields and rules list."""
-        rules_group = QGroupBox("Custom Filter Rules")
+        rules_group = QGroupBox(QCoreApplication.translate("ProfilesTab", "Custom Filter Rules"))
         rules_group.setStyleSheet(_GROUP_STYLE)
         rules_lay = QVBoxLayout(rules_group)
         rules_lay.setContentsMargins(10, 20, 10, 8)
@@ -193,11 +191,11 @@ class ProfilesTab(QWidget):
         row1 = QHBoxLayout()
         row1.setSpacing(6)
         self._rule_name_edit = QLineEdit()
-        self._rule_name_edit.setPlaceholderText("Name")
+        self._rule_name_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "Name"))
         self._rule_name_edit.setFixedWidth(120)
         row1.addWidget(self._rule_name_edit)
         self._rule_pattern_edit = QLineEdit()
-        self._rule_pattern_edit.setPlaceholderText("Pattern (regex or exact string)")
+        self._rule_pattern_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "Pattern (regex or exact string)"))
         row1.addWidget(self._rule_pattern_edit, 1)
         rules_lay.addLayout(row1)
 
@@ -205,13 +203,13 @@ class ProfilesTab(QWidget):
         row2 = QHBoxLayout()
         row2.setSpacing(6)
         self._rule_type_combo = QComboBox()
-        self._rule_type_combo.addItems(["Regex", "Exact"])
+        self._rule_type_combo.addItems([QCoreApplication.translate("ProfilesTab", "Regex"), QCoreApplication.translate("ProfilesTab", "Exact")])
         self._rule_type_combo.setFixedWidth(80)
         row2.addWidget(self._rule_type_combo)
         self._rule_replacement_edit = QLineEdit()
-        self._rule_replacement_edit.setPlaceholderText("Replacement (default: [CUSTOM_REDACTED])")
+        self._rule_replacement_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "Replacement (default: [CUSTOM_REDACTED])"))
         row2.addWidget(self._rule_replacement_edit, 1)
-        self._add_rule_btn = QPushButton("+ Add")
+        self._add_rule_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "+ Add"))
         self._add_rule_btn.setStyleSheet(_BTN_STYLE)
         self._add_rule_btn.setMinimumWidth(70)
         self._add_rule_btn.clicked.connect(self._on_add_rule)
@@ -225,7 +223,7 @@ class ProfilesTab(QWidget):
         self._rules_list.setMaximumHeight(72)
         list_row.addWidget(self._rules_list, 1)
 
-        self._remove_rule_btn = QPushButton("Remove")
+        self._remove_rule_btn = QPushButton(QCoreApplication.translate("ProfilesTab", "Remove"))
         self._remove_rule_btn.setStyleSheet(_BTN_STYLE)
         self._remove_rule_btn.setMinimumWidth(70)
         self._remove_rule_btn.clicked.connect(self._on_remove_rule)
@@ -236,7 +234,7 @@ class ProfilesTab(QWidget):
 
     def _build_denied_tools_section(self) -> QGroupBox:
         """Build the denied tools group with category checkboxes or text fallback."""
-        tools_group = QGroupBox("Denied Tools")
+        tools_group = QGroupBox(QCoreApplication.translate("ProfilesTab", "Denied Tools"))
         tools_group.setStyleSheet(_GROUP_STYLE)
         tools_lay = QVBoxLayout(tools_group)
         tools_lay.setContentsMargins(10, 20, 10, 8)
@@ -287,14 +285,14 @@ class ProfilesTab(QWidget):
             # Fallback: free-text input when no registry available
             self._denied_tools_edit = QPlainTextEdit()
             self._denied_tools_edit.setMaximumHeight(60)
-            self._denied_tools_edit.setPlaceholderText("One tool name per line (e.g. list_functions, read_bytes)")
+            self._denied_tools_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "One tool name per line (e.g. list_functions, read_bytes)"))
             tools_lay.addWidget(self._denied_tools_edit)
 
         return tools_group
 
     def _build_advanced_section(self) -> QGroupBox:
         """Build the advanced settings group with denied functions and prompt filters."""
-        adv_group = QGroupBox("Advanced")
+        adv_group = QGroupBox(QCoreApplication.translate("ProfilesTab", "Advanced"))
         adv_group.setStyleSheet(_GROUP_STYLE)
         adv_form = QFormLayout(adv_group)
         adv_form.setContentsMargins(10, 20, 10, 8)
@@ -302,13 +300,13 @@ class ProfilesTab(QWidget):
 
         self._denied_funcs_edit = QPlainTextEdit()
         self._denied_funcs_edit.setMaximumHeight(48)
-        self._denied_funcs_edit.setPlaceholderText("One function name per line (binary-specific)")
-        adv_form.addRow("Denied Functions:", self._denied_funcs_edit)
+        self._denied_funcs_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "One function name per line (binary-specific)"))
+        adv_form.addRow(QCoreApplication.translate("ProfilesTab", "Denied Functions:"), self._denied_funcs_edit)
 
         self._custom_filters_edit = QPlainTextEdit()
         self._custom_filters_edit.setMaximumHeight(48)
-        self._custom_filters_edit.setPlaceholderText("Custom prompt instructions (one per line)")
-        adv_form.addRow("Prompt Filters:", self._custom_filters_edit)
+        self._custom_filters_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "Custom prompt instructions (one per line)"))
+        adv_form.addRow(QCoreApplication.translate("ProfilesTab", "Prompt Filters:"), self._custom_filters_edit)
 
         return adv_group
 
@@ -434,7 +432,7 @@ class ProfilesTab(QWidget):
         if not rule_name or not pattern:
             return
 
-        is_regex = self._rule_type_combo.currentText() == "Regex"
+        is_regex = self._rule_type_combo.currentText() == QCoreApplication.translate("ProfilesTab", "Regex")
         replacement = self._rule_replacement_edit.text().strip() or "[CUSTOM_REDACTED]"
 
         rule: dict[str, Any] = {
@@ -481,12 +479,12 @@ class ProfilesTab(QWidget):
     # ------------------------------------------------------------------
 
     def _on_new_profile(self) -> None:
-        result = self._prompt_new_profile("New Profile")
+        result = self._prompt_new_profile(QCoreApplication.translate("ProfilesTab", "New Profile"))
         if not result:
             return
         name, desc = result
         if name in BUILTIN_PROFILES or name in self._custom_profiles:
-            QMessageBox.warning(self, "Error", f"Profile '{name}' already exists.")
+            QMessageBox.warning(self, QCoreApplication.translate("ProfilesTab", "Error"), QCoreApplication.translate("ProfilesTab", "Profile '{name}' already exists.").format(name=name))
             return
         p = AnalysisProfile(name=name, description=desc)
         self._custom_profiles[name] = p.to_dict()
@@ -499,12 +497,12 @@ class ProfilesTab(QWidget):
         current = self._profile_combo.currentText()
         if not current:
             return
-        result = self._prompt_new_profile("Clone Profile")
+        result = self._prompt_new_profile(QCoreApplication.translate("ProfilesTab", "Clone Profile"))
         if not result:
             return
         name, desc = result
         if name in BUILTIN_PROFILES or name in self._custom_profiles:
-            QMessageBox.warning(self, "Error", f"Profile '{name}' already exists.")
+            QMessageBox.warning(self, QCoreApplication.translate("ProfilesTab", "Error"), QCoreApplication.translate("ProfilesTab", "Profile '{name}' already exists.").format(name=name))
             return
         self._save_current_to_working_copy()
         profile = get_profile(current, self._custom_profiles)
@@ -530,8 +528,8 @@ class ProfilesTab(QWidget):
             return
         reply = QMessageBox.question(
             self,
-            "Delete Profile",
-            f"Delete profile '{name}'?",
+            QCoreApplication.translate("ProfilesTab", "Delete Profile"),
+            QCoreApplication.translate("ProfilesTab", "Delete profile '{name}'?").format(name=name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -550,13 +548,13 @@ class ProfilesTab(QWidget):
 
         form = QFormLayout()
         name_edit = QLineEdit()
-        name_edit.setPlaceholderText("e.g. my-custom-profile")
-        form.addRow("Name:", name_edit)
+        name_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "e.g. my-custom-profile"))
+        form.addRow(QCoreApplication.translate("ProfilesTab", "Name:"), name_edit)
 
         desc_edit = QPlainTextEdit()
         desc_edit.setMaximumHeight(60)
-        desc_edit.setPlaceholderText("Describe the profile's purpose (shown to the AI agent)")
-        form.addRow("Description:", desc_edit)
+        desc_edit.setPlaceholderText(QCoreApplication.translate("ProfilesTab", "Describe the profile's purpose (shown to the AI agent)"))
+        form.addRow(QCoreApplication.translate("ProfilesTab", "Description:"), desc_edit)
         lay.addLayout(form)
 
         error_label = QLabel()
@@ -571,11 +569,11 @@ class ProfilesTab(QWidget):
             n = name_edit.text().strip().lower().replace(" ", "-")
             d = desc_edit.toPlainText().strip()
             if not n:
-                error_label.setText("Name is required")
+                error_label.setText(QCoreApplication.translate("ProfilesTab", "Name is required"))
                 error_label.show()
                 return
             if not d:
-                error_label.setText("Description is required \u2014 it helps the AI agent follow your constraints")
+                error_label.setText(QCoreApplication.translate("ProfilesTab", "Description is required \u2014 it helps the AI agent follow your constraints"))
                 error_label.show()
                 return
             name_edit.setText(n)
