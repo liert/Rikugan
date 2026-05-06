@@ -48,9 +48,6 @@ def build_assistant_message(
 
     content = _THINK_RE.sub("", assistant_text, count=1).strip()
 
-    print("content:", content)
-    print("reasoning_content:", reasoning_content)
-
     msg = Message(
         role=Role.ASSISTANT,
         content=content,
