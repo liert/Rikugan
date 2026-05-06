@@ -9,6 +9,7 @@ from ...core.logging import log_debug
 from ...mcp.config import MCPServerConfig
 from ..qt_compat import (
     QCheckBox,
+    QCoreApplication,
     QGroupBox,
     QLabel,
     QScrollArea,
@@ -55,11 +56,11 @@ class MCPTab(QWidget):
 
     def _build_rikugan_group(self) -> QGroupBox:
         """Build the Rikugan MCP servers group box."""
-        group = QGroupBox("Rikugan MCP Servers")
+        group = QGroupBox(QCoreApplication.translate("MCPTab", "Rikugan MCP Servers"))
         layout = QVBoxLayout(group)
 
         if not self._rikugan_servers:
-            layout.addWidget(QLabel("No MCP servers configured"))
+            layout.addWidget(QLabel(QCoreApplication.translate("MCPTab", "No MCP servers configured")))
             return group
 
         for server in sorted(self._rikugan_servers, key=lambda s: s.name):
@@ -73,17 +74,17 @@ class MCPTab(QWidget):
     def _build_external_group(self, source_key: str, servers: list[MCPServerConfig]) -> QGroupBox:
         """Build a group box for external MCP servers from one source."""
         if source_key == "claude":
-            title = "Claude Code MCP Servers"
+            title = QCoreApplication.translate("MCPTab", "Claude Code MCP Servers")
         elif source_key == "codex":
-            title = "Codex MCP Servers"
+            title = QCoreApplication.translate("MCPTab", "Codex MCP Servers")
         else:
-            title = f"{source_key} MCP Servers"
+            title = QCoreApplication.translate("MCPTab", "{source_key} MCP Servers").format(source_key=source_key)
 
         group = QGroupBox(title)
         layout = QVBoxLayout(group)
 
         if not servers:
-            layout.addWidget(QLabel("No MCP servers found"))
+            layout.addWidget(QLabel(QCoreApplication.translate("MCPTab", "No MCP servers found")))
             return group
 
         enabled_set = set(self._config.enabled_external_mcp)

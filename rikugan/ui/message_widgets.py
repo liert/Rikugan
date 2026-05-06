@@ -9,6 +9,7 @@ from typing import ClassVar
 
 from .markdown import md_to_html
 from .qt_compat import (
+    QCoreApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -221,7 +222,7 @@ class UserMessageWidget(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
 
-        self._role_label = QLabel("You")
+        self._role_label = QLabel(QCoreApplication.translate("UserMessageWidget", "You"))
         self._role_label.setStyleSheet(
             host_stylesheet(
                 f"color: {_USER_ROLE}; font-weight: bold; font-size: 11px;",
@@ -325,7 +326,7 @@ class _ThinkingBlock(QFrame):
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(4)
         header.addWidget(self._toggle)
-        self._header_label = QLabel("Thinking")
+        self._header_label = QLabel(QCoreApplication.translate("_ThinkingBlock", "Thinking"))
         self._header_label.setStyleSheet(
             host_stylesheet(
                 f"color: {_MUTED_TEXT}; font-size: 11px; font-style: italic;",
@@ -363,7 +364,7 @@ class _ThinkingBlock(QFrame):
 
     def set_thinking(self, text: str, in_progress: bool = False) -> None:
         self._content.setText(md_to_html(text, self))
-        label = "Thinking\u2026" if in_progress else "Thinking"
+        label = QCoreApplication.translate("_ThinkingBlock", "Thinking\u2026") if in_progress else QCoreApplication.translate("_ThinkingBlock", "Thinking")
         self._header_label.setText(label)
         self.show()
 
@@ -398,7 +399,7 @@ class AssistantMessageWidget(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
 
-        self._role_label = QLabel("Rikugan")
+        self._role_label = QLabel(QCoreApplication.translate("AssistantMessageWidget", "Rikugan"))
         self._role_label.setStyleSheet(
             host_stylesheet(
                 f"color: {_ASSISTANT_ROLE}; font-weight: bold; font-size: 11px;",
@@ -608,7 +609,7 @@ class QueuedMessageWidget(QFrame):
 
         content_layout = QVBoxLayout()
 
-        self._role_label = QLabel("You")
+        self._role_label = QLabel(QCoreApplication.translate("QueuedMessageWidget", "You"))
         self._role_label.setStyleSheet(
             host_stylesheet(
                 f"color: {_USER_ROLE}; font-weight: bold; font-size: 11px;",
@@ -635,7 +636,7 @@ class QueuedMessageWidget(QFrame):
 
         layout.addLayout(content_layout, 1)
 
-        self._badge = QLabel("[queued]")
+        self._badge = QLabel(QCoreApplication.translate("QueuedMessageWidget", "[queued]"))
         self._badge.setStyleSheet(
             host_stylesheet(
                 f"color: {_MUTED_TEXT}; font-size: 10px; font-style: italic;",
@@ -666,7 +667,7 @@ class UserQuestionWidget(QFrame):
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(6)
 
-        self._header = QLabel("Rikugan asks:")
+        self._header = QLabel(QCoreApplication.translate("UserQuestionWidget", "Rikugan asks:"))
         self._header.setStyleSheet(
             host_stylesheet(
                 "color: #dcdcaa; font-weight: bold; font-size: 11px;",
@@ -839,7 +840,7 @@ class ExplorationFindingWidget(QFrame):
                     f"color: #d7ba7d; {_native_text_style(size=12, bold=True)}",
                 )
             )
-            rel_label.setToolTip("High relevance")
+            rel_label.setToolTip(QCoreApplication.translate("ExplorationFindingWidget", "High relevance"))
             layout.addWidget(rel_label)
 
 
@@ -990,7 +991,7 @@ class ErrorMessageWidget(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
 
-        self._header = QLabel("Error")
+        self._header = QLabel(QCoreApplication.translate("ErrorMessageWidget", "Error"))
         self._header.setStyleSheet(
             host_stylesheet(
                 "color: #f44747; font-weight: bold; font-size: 11px;",

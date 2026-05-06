@@ -12,6 +12,7 @@ from ..core.host import (
 )
 from ..core.logging import log_debug
 from .qt_compat import (
+    QCoreApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -71,10 +72,10 @@ class ContextBar(QFrame):
         layout.setContentsMargins(8, 2, 8, 2)
         layout.setSpacing(16)
 
-        self._address_label = self._make_pair("Addr:", "\u2014")
-        self._function_label = self._make_pair("Func:", "\u2014")
-        self._model_label = self._make_pair("Model:", "\u2014")
-        self._tokens_label = self._make_pair("Tokens:", "0")
+        self._address_label = self._make_pair(QCoreApplication.translate("ContextBar", "Addr:"), "\u2014")
+        self._function_label = self._make_pair(QCoreApplication.translate("ContextBar", "Func:"), "\u2014")
+        self._model_label = self._make_pair(QCoreApplication.translate("ContextBar", "Model:"), "\u2014")
+        self._tokens_label = self._make_pair(QCoreApplication.translate("ContextBar", "Tokens:"), "0")
 
         for label, value in (
             self._address_label,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .qt_compat import QDialog, QDialogButtonBox, QLabel, QPushButton, QVBoxLayout, QWidget
+from .qt_compat import QCoreApplication, QDialog, QDialogButtonBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
 _POLICY_URL = "https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use"
 
@@ -24,30 +24,34 @@ def show_oauth_consent(parent: QWidget | None = None) -> str:
         ``"cancel"``  — dialog dismissed without choosing.
     """
     dlg = QDialog(parent)
-    dlg.setWindowTitle("OAuth Token Detected")
+    dlg.setWindowTitle(QCoreApplication.translate("OAuthConsent", "OAuth Token Detected"))
     dlg.setStyleSheet(_DIALOG_STYLE)
     dlg.setMinimumWidth(480)
 
     layout = QVBoxLayout(dlg)
 
     warning = QLabel(
-        "<b>Use your Claude Code OAuth token with Rikugan?</b>"
-        "<br><br>"
-        "Using this token with third-party tools carries risk. "
-        "Please read Anthropic's policy before proceeding:"
-        "<br><br>"
-        f'<a href="{_POLICY_URL}" style="color: #4ec9b0;">{_POLICY_URL}</a>'
-        "<br><br>"
-        "By clicking <b>Ok</b> below, you acknowledge the risk and allow "
-        "Rikugan to use this token. This choice is saved and won't be asked again."
+        QCoreApplication.translate("OAuthConsent",
+            "<b>Use your Claude Code OAuth token with Rikugan?</b>"
+            "<br><br>"
+            "Using this token with third-party tools carries risk. "
+            "Please read Anthropic's policy before proceeding:"
+            "<br><br>"
+        )
+        + f'<a href="{_POLICY_URL}" style="color: #4ec9b0;">{_POLICY_URL}</a>'
+        + QCoreApplication.translate("OAuthConsent",
+            "<br><br>"
+            "By clicking <b>Ok</b> below, you acknowledge the risk and allow "
+            "Rikugan to use this token. This choice is saved and won't be asked again."
+        )
     )
     warning.setWordWrap(True)
     warning.setOpenExternalLinks(True)
     layout.addWidget(warning)
 
     btn_box = QDialogButtonBox()
-    ok_btn = QPushButton("Ok, don't show again")
-    api_btn = QPushButton("Use API Key instead")
+    ok_btn = QPushButton(QCoreApplication.translate("OAuthConsent", "Ok, don't show again"))
+    api_btn = QPushButton(QCoreApplication.translate("OAuthConsent", "Use API Key instead"))
     btn_box.addButton(ok_btn, QDialogButtonBox.ButtonRole.AcceptRole)
     btn_box.addButton(api_btn, QDialogButtonBox.ButtonRole.RejectRole)
     layout.addWidget(btn_box)

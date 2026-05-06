@@ -8,6 +8,7 @@ from .qt_compat import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
+    QCoreApplication,
     QHBoxLayout,
     QHeaderView,
     QIntValidator,
@@ -175,18 +176,18 @@ class BulkRenamerWidget(QWidget):
         top_bar.setSpacing(4)
 
         self._filter_edit = QLineEdit()
-        self._filter_edit.setPlaceholderText("Filter by name or address...")
+        self._filter_edit.setPlaceholderText(QCoreApplication.translate("BulkRenamerWidget", "Filter by name or address..."))
         self._filter_edit.setStyleSheet(_FILTER_STYLE)
         self._filter_edit.textChanged.connect(self._on_filter_changed)
         top_bar.addWidget(self._filter_edit, 1)
 
         self._filter_combo = QComboBox()
         self._filter_combo.setStyleSheet(_COMBO_STYLE)
-        self._filter_combo.addItems(["All Functions", "Auto-named Only", "User-renamed", "Imports"])
+        self._filter_combo.addItems([QCoreApplication.translate("BulkRenamerWidget", "All Functions"), QCoreApplication.translate("BulkRenamerWidget", "Auto-named Only"), QCoreApplication.translate("BulkRenamerWidget", "User-renamed"), QCoreApplication.translate("BulkRenamerWidget", "Imports")])
         self._filter_combo.currentIndexChanged.connect(self._on_filter_changed)
         top_bar.addWidget(self._filter_combo)
 
-        self._selection_label = QLabel("0 / 0 selected")
+        self._selection_label = QLabel(QCoreApplication.translate("BulkRenamerWidget", "0 / 0 selected"))
         self._selection_label.setStyleSheet(_MUTED_LABEL_STYLE)
         top_bar.addWidget(self._selection_label)
 
@@ -197,7 +198,7 @@ class BulkRenamerWidget(QWidget):
         self._table.setObjectName("renamer_table")
         self._table.setStyleSheet(_TABLE_STYLE)
         self._table.setColumnCount(6)
-        self._table.setHorizontalHeaderLabels(["", "Address", "Current Name", "Length", "New Name", "Status"])
+        self._table.setHorizontalHeaderLabels(["", QCoreApplication.translate("BulkRenamerWidget", "Address"), QCoreApplication.translate("BulkRenamerWidget", "Current Name"), QCoreApplication.translate("BulkRenamerWidget", "Length"), QCoreApplication.translate("BulkRenamerWidget", "New Name"), QCoreApplication.translate("BulkRenamerWidget", "Status")])
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -238,25 +239,25 @@ class BulkRenamerWidget(QWidget):
         analysis_bar = QHBoxLayout()
         analysis_bar.setSpacing(6)
 
-        mode_label = QLabel("Mode:")
+        mode_label = QLabel(QCoreApplication.translate("BulkRenamerWidget", "Mode:"))
         mode_label.setStyleSheet(_LABEL_STYLE)
         analysis_bar.addWidget(mode_label)
 
-        self._quick_radio = QRadioButton("Quick")
+        self._quick_radio = QRadioButton(QCoreApplication.translate("BulkRenamerWidget", "Quick"))
         self._quick_radio.setStyleSheet(_RADIO_STYLE)
         self._quick_radio.setChecked(True)
         analysis_bar.addWidget(self._quick_radio)
 
-        self._deep_radio = QRadioButton("Deep")
+        self._deep_radio = QRadioButton(QCoreApplication.translate("BulkRenamerWidget", "Deep"))
         self._deep_radio.setStyleSheet(_RADIO_STYLE)
         self._deep_radio.toggled.connect(lambda: self._update_selection_count())
         analysis_bar.addWidget(self._deep_radio)
 
         analysis_bar.addSpacing(12)
 
-        batch_label = QLabel("Batch:")
+        batch_label = QLabel(QCoreApplication.translate("BulkRenamerWidget", "Batch:"))
         batch_label.setStyleSheet(_LABEL_STYLE)
-        batch_label.setToolTip("Quick: functions per LLM prompt. Deep: ignored (1 agent per function).")
+        batch_label.setToolTip(QCoreApplication.translate("BulkRenamerWidget", "Quick: functions per LLM prompt. Deep: ignored (1 agent per function)."))
         analysis_bar.addWidget(batch_label)
 
         self._batch_input = QLineEdit("10")
@@ -264,13 +265,13 @@ class BulkRenamerWidget(QWidget):
         self._batch_input.setValidator(QIntValidator(1, 999999))
         self._batch_input.setFixedWidth(50)
         self._batch_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._batch_input.setToolTip("Quick: functions per LLM prompt. Deep: ignored (1 agent per function).")
+        self._batch_input.setToolTip(QCoreApplication.translate("BulkRenamerWidget", "Quick: functions per LLM prompt. Deep: ignored (1 agent per function)."))
         self._batch_input.textChanged.connect(lambda: self._update_selection_count())
         analysis_bar.addWidget(self._batch_input)
 
-        concurrent_label = QLabel("Jobs:")
+        concurrent_label = QLabel(QCoreApplication.translate("BulkRenamerWidget", "Jobs:"))
         concurrent_label.setStyleSheet(_LABEL_STYLE)
-        concurrent_label.setToolTip("Max parallel agents/requests running at the same time")
+        concurrent_label.setToolTip(QCoreApplication.translate("BulkRenamerWidget", "Max parallel agents/requests running at the same time"))
         analysis_bar.addWidget(concurrent_label)
 
         self._concurrent_input = QLineEdit("3")
@@ -278,7 +279,7 @@ class BulkRenamerWidget(QWidget):
         self._concurrent_input.setValidator(QIntValidator(1, 999999))
         self._concurrent_input.setFixedWidth(50)
         self._concurrent_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._concurrent_input.setToolTip("Max parallel agents/requests running at the same time")
+        self._concurrent_input.setToolTip(QCoreApplication.translate("BulkRenamerWidget", "Max parallel agents/requests running at the same time"))
         analysis_bar.addWidget(self._concurrent_input)
 
         analysis_bar.addStretch()
@@ -288,24 +289,24 @@ class BulkRenamerWidget(QWidget):
         action_bar = QHBoxLayout()
         action_bar.setSpacing(4)
 
-        self._start_btn = QPushButton("Start")
+        self._start_btn = QPushButton(QCoreApplication.translate("BulkRenamerWidget", "Start"))
         self._start_btn.setStyleSheet(_START_BTN_STYLE)
         self._start_btn.clicked.connect(self._on_start)
         action_bar.addWidget(self._start_btn)
 
-        self._stop_btn = QPushButton("Stop")
+        self._stop_btn = QPushButton(QCoreApplication.translate("BulkRenamerWidget", "Stop"))
         self._stop_btn.setStyleSheet(_STOP_BTN_STYLE)
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._on_stop)
         action_bar.addWidget(self._stop_btn)
 
-        self._pause_btn = QPushButton("Pause")
+        self._pause_btn = QPushButton(QCoreApplication.translate("BulkRenamerWidget", "Pause"))
         self._pause_btn.setStyleSheet(_BTN_STYLE)
         self._pause_btn.setEnabled(False)
         self._pause_btn.clicked.connect(self._on_pause_toggle)
         action_bar.addWidget(self._pause_btn)
 
-        self._undo_btn = QPushButton("Undo All")
+        self._undo_btn = QPushButton(QCoreApplication.translate("BulkRenamerWidget", "Undo All"))
         self._undo_btn.setStyleSheet(_BTN_STYLE)
         self._undo_btn.setEnabled(False)
         self._undo_btn.clicked.connect(self.undo_requested.emit)
@@ -520,7 +521,7 @@ class BulkRenamerWidget(QWidget):
             self._start_btn.setEnabled(True)
             self._stop_btn.setEnabled(False)
             self._pause_btn.setEnabled(False)
-            self._pause_btn.setText("Pause")
+            self._pause_btn.setText(QCoreApplication.translate("BulkRenamerWidget", "Pause"))
             self._paused = False
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
@@ -550,14 +551,14 @@ class BulkRenamerWidget(QWidget):
     def _on_pause_toggle(self) -> None:
         """Toggle pause/resume and update button text."""
         self._paused = not self._paused
-        self._pause_btn.setText("Resume" if self._paused else "Pause")
+        self._pause_btn.setText(QCoreApplication.translate("BulkRenamerWidget", "Resume") if self._paused else QCoreApplication.translate("BulkRenamerWidget", "Pause"))
         self.pause_requested.emit()
 
     def _on_stop(self) -> None:
         """Stop the running renamer engine."""
         self._stop_btn.setEnabled(False)
         self._pause_btn.setEnabled(False)
-        self._pause_btn.setText("Pause")
+        self._pause_btn.setText(QCoreApplication.translate("BulkRenamerWidget", "Pause"))
         self._start_btn.setEnabled(True)
         self._paused = False
         self.cancel_requested.emit()
@@ -648,7 +649,7 @@ class BulkRenamerWidget(QWidget):
         self._start_btn.setEnabled(False)
         self._stop_btn.setEnabled(True)
         self._pause_btn.setEnabled(True)
-        self._pause_btn.setText("Pause")
+        self._pause_btn.setText(QCoreApplication.translate("BulkRenamerWidget", "Pause"))
         self._paused = False
 
         # Mark selected jobs as queued

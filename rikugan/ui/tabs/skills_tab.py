@@ -10,6 +10,7 @@ from ...core.logging import log_debug
 from ...skills.loader import SkillDefinition
 from ..qt_compat import (
     QCheckBox,
+    QCoreApplication,
     QGroupBox,
     QLabel,
     QScrollArea,
@@ -55,13 +56,13 @@ class SkillsTab(QWidget):
 
     def _build_rikugan_group(self, skills: list[SkillDefinition]) -> QGroupBox:
         """Build the Rikugan skills group box."""
-        group = QGroupBox("Rikugan Skills")
+        group = QGroupBox(QCoreApplication.translate("SkillsTab", "Rikugan Skills"))
         layout = QVBoxLayout(group)
 
         disabled_set = set(self._config.disabled_skills)
 
         if not skills:
-            layout.addWidget(QLabel("No skills found"))
+            layout.addWidget(QLabel(QCoreApplication.translate("SkillsTab", "No skills found")))
             return group
 
         for skill in sorted(skills, key=lambda s: s.slug):
@@ -78,7 +79,7 @@ class SkillsTab(QWidget):
         layout = QVBoxLayout(group)
 
         if not skills:
-            layout.addWidget(QLabel("No skills found"))
+            layout.addWidget(QLabel(QCoreApplication.translate("SkillsTab", "No skills found")))
             return group
 
         enabled_set = set(self._config.enabled_external_skills)

@@ -17,6 +17,7 @@ from .qt_compat import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QCoreApplication,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -123,7 +124,7 @@ class _AddProviderDialog(QDialog):
 
     def __init__(self, existing_names: list, parent: QWidget = None):
         super().__init__(parent)
-        self.setWindowTitle("Add Custom Connection")
+        self.setWindowTitle(QCoreApplication.translate("_AddProviderDialog", "Add Custom Connection"))
         self.setMinimumWidth(400)
         self._existing = {n.lower() for n in existing_names}
 
@@ -131,12 +132,12 @@ class _AddProviderDialog(QDialog):
         form = QFormLayout()
 
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. minimax, deepseek, local-vllm")
-        form.addRow("Connection Name:", self._name_edit)
+        self._name_edit.setPlaceholderText(QCoreApplication.translate("_AddProviderDialog", "e.g. minimax, deepseek, local-vllm"))
+        form.addRow(QCoreApplication.translate("_AddProviderDialog", "Connection Name:"), self._name_edit)
 
         self._base_edit = QLineEdit()
         self._base_edit.setPlaceholderText(_CUSTOM_PROVIDER_URL_PLACEHOLDER)
-        form.addRow("API Base URL:", self._base_edit)
+        form.addRow(QCoreApplication.translate("_AddProviderDialog", "API Base URL:"), self._base_edit)
 
         layout.addLayout(form)
 
@@ -153,16 +154,16 @@ class _AddProviderDialog(QDialog):
     def _validate(self) -> None:
         name = self._name_edit.text().strip().lower().replace(" ", "-")
         if not name:
-            self._error_label.setText("Name is required")
+            self._error_label.setText(QCoreApplication.translate("_AddProviderDialog", "Name is required"))
             self._error_label.show()
             return
         if name in self._existing:
-            self._error_label.setText(f"'{name}' already exists")
+            self._error_label.setText(QCoreApplication.translate("_AddProviderDialog", "'{name}' already exists").format(name=name))
             self._error_label.show()
             return
         base = self._base_edit.text().strip()
         if not base:
-            self._error_label.setText("API Base URL is required")
+            self._error_label.setText(QCoreApplication.translate("_AddProviderDialog", "API Base URL is required"))
             self._error_label.show()
             return
         self._name_edit.setText(name)
@@ -199,7 +200,7 @@ class SettingsDialog(QDialog):
         self._shown = False
         self._closed = False
         self.encryption_password: str = ""
-        self.setWindowTitle("Rikugan Settings")
+        self.setWindowTitle(QCoreApplication.translate("SettingsDialog", "Rikugan Settings"))
         screen = QApplication.primaryScreen()
         if screen:
             avail = screen.availableGeometry()
@@ -235,7 +236,7 @@ class SettingsDialog(QDialog):
         self._behavior_group = self._build_behavior_group()
         playout.addWidget(self._behavior_group)
         playout.addStretch()
-        self._tabs.addTab(provider_tab, "Provider")
+        self._tabs.addTab(provider_tab, QCoreApplication.translate("SettingsDialog", "Provider"))
 
         # Tab 1-3: Skills, MCP, Profiles — all use a shared SettingsService
         from .settings_service import SettingsService
@@ -245,11 +246,11 @@ class SettingsDialog(QDialog):
 
         self._service = SettingsService(self._config, tool_registry=self._tool_registry)
         self._skills_tab = SkillsTab(self._config, service=self._service)
-        self._tabs.addTab(self._skills_tab, "Skills")
+        self._tabs.addTab(self._skills_tab, QCoreApplication.translate("SettingsDialog", "Skills"))
         self._mcp_tab = MCPTab(self._config, service=self._service)
-        self._tabs.addTab(self._mcp_tab, "MCP")
+        self._tabs.addTab(self._mcp_tab, QCoreApplication.translate("SettingsDialog", "MCP"))
         self._profiles_tab = ProfilesTab(self._config, service=self._service)
-        self._tabs.addTab(self._profiles_tab, "Profiles")
+        self._tabs.addTab(self._profiles_tab, QCoreApplication.translate("SettingsDialog", "Profiles"))
 
         layout.addWidget(self._tabs)
 
@@ -264,7 +265,7 @@ class SettingsDialog(QDialog):
 
     def _build_provider_group(self) -> QGroupBox:
         """Build the LLM Provider settings group box."""
-        provider_group = QGroupBox("LLM Provider")
+        provider_group = QGroupBox(QCoreApplication.translate("SettingsDialog", "LLM Provider"))
         provider_form = QFormLayout(provider_group)
 
         warnings = self._registry.dependency_warnings()
@@ -272,39 +273,38 @@ class SettingsDialog(QDialog):
         self._dependency_label.setWordWrap(True)
         self._dependency_label.setStyleSheet(maybe_host_stylesheet("color: #f5d98b; font-size: 11px;"))
         if warnings:
-            self._dependency_label.setText("Warnings: " + " ".join(warnings))
+            self._dependency_label.setText(QCoreApplication.translate("SettingsDialog", "Warnings:") + " " + " ".join(warnings))
             provider_form.addRow(self._dependency_label)
         else:
             self._dependency_label.hide()
 
-        provider_form.addRow("Provider:", self._build_provider_row())
+        provider_form.addRow(QCoreApplication.translate("SettingsDialog", "Provider:"), self._build_provider_row())
 
         # API key — only show explicit user keys, NOT auto-resolved OAuth tokens
         key_layout = QHBoxLayout()
         self._api_key_edit = QLineEdit(self._config.provider.api_key)
         self._api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self._api_key_edit.setPlaceholderText("sk-... or leave empty for auto-detect")
+        self._api_key_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "sk-... or leave empty for auto-detect"))
         key_layout.addWidget(self._api_key_edit, 1)
         self._auth_status = QLabel()
         key_layout.addWidget(self._auth_status)
-        provider_form.addRow("API Key:", key_layout)
+        provider_form.addRow(QCoreApplication.translate("SettingsDialog", "API Key:"), key_layout)
 
         # OAuth checkbox — controls keychain autoload
-        self._oauth_cb = QCheckBox("Use OAuth from Claude Code (macOS Keychain)")
+        self._oauth_cb = QCheckBox(QCoreApplication.translate("SettingsDialog", "Use OAuth from Claude Code (macOS Keychain)"))
         self._oauth_cb.setChecked(self._config.oauth_consent_accepted)
         self._oauth_cb.setVisible(self._config.provider.name == "anthropic")
         self._oauth_cb.setToolTip(
-            "Auto-load your Claude Code OAuth token from the macOS Keychain.\n"
-            "Requires accepting Anthropic's credential use policy."
+            QCoreApplication.translate("SettingsDialog", "Auto-load your Claude Code OAuth token from the macOS Keychain.\nRequires accepting Anthropic's credential use policy.")
         )
         self._oauth_cb.toggled.connect(self._on_oauth_toggled)
         provider_form.addRow("", self._oauth_cb)
 
         self._api_base_edit = QLineEdit(self._config.provider.api_base)
-        self._api_base_edit.setPlaceholderText("Custom endpoint URL (optional)")
-        provider_form.addRow("API Base:", self._api_base_edit)
+        self._api_base_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "Custom endpoint URL (optional)"))
+        provider_form.addRow(QCoreApplication.translate("SettingsDialog", "API Base:"), self._api_base_edit)
 
-        provider_form.addRow("Model:", self._build_model_row())
+        provider_form.addRow(QCoreApplication.translate("SettingsDialog", "Model:"), self._build_model_row())
 
         return provider_group
 
@@ -325,14 +325,14 @@ class SettingsDialog(QDialog):
 
         self._add_provider_btn = QPushButton("+")
         self._add_provider_btn.setFixedSize(28, 28)
-        self._add_provider_btn.setToolTip("Add custom OpenAI-compatible connection")
+        self._add_provider_btn.setToolTip(QCoreApplication.translate("SettingsDialog", "Add custom OpenAI-compatible connection"))
         self._add_provider_btn.setStyleSheet(btn_style)
         self._add_provider_btn.clicked.connect(self._on_add_custom_provider)
         row.addWidget(self._add_provider_btn)
 
         self._remove_provider_btn = QPushButton("\u2212")  # minus sign
         self._remove_provider_btn.setFixedSize(28, 28)
-        self._remove_provider_btn.setToolTip("Remove custom connection")
+        self._remove_provider_btn.setToolTip(QCoreApplication.translate("SettingsDialog", "Remove custom connection"))
         self._remove_provider_btn.setStyleSheet(btn_style)
         self._remove_provider_btn.clicked.connect(self._on_remove_custom_provider)
         row.addWidget(self._remove_provider_btn)
@@ -348,7 +348,7 @@ class SettingsDialog(QDialog):
         self._model_combo.setCurrentText(self._config.provider.model)
         model_layout.addWidget(self._model_combo, 1)
 
-        self._fetch_btn = QPushButton("Refresh")
+        self._fetch_btn = QPushButton(QCoreApplication.translate("SettingsDialog", "Refresh"))
         self._fetch_btn.setFixedWidth(70)
         self._fetch_btn.setStyleSheet(
             maybe_host_stylesheet(
@@ -368,7 +368,7 @@ class SettingsDialog(QDialog):
 
     def _build_generation_group(self) -> QGroupBox:
         """Build the Generation settings group box."""
-        gen_group = QGroupBox("Generation")
+        gen_group = QGroupBox(QCoreApplication.translate("SettingsDialog", "Generation"))
         gen_form = QFormLayout(gen_group)
 
         self._temp_spin = QDoubleSpinBox()
@@ -376,32 +376,32 @@ class SettingsDialog(QDialog):
         self._temp_spin.setSingleStep(0.05)
         self._temp_spin.setDecimals(2)
         self._temp_spin.setValue(self._config.provider.temperature)
-        gen_form.addRow("Temperature:", self._temp_spin)
+        gen_form.addRow(QCoreApplication.translate("SettingsDialog", "Temperature:"), self._temp_spin)
 
         self._max_tokens_spin = QSpinBox()
         self._max_tokens_spin.setRange(256, 65536)
         self._max_tokens_spin.setSingleStep(1024)
         self._max_tokens_spin.setValue(self._config.provider.max_tokens)
-        gen_form.addRow("Max Output Tokens:", self._max_tokens_spin)
+        gen_form.addRow(QCoreApplication.translate("SettingsDialog", "Max Output Tokens:"), self._max_tokens_spin)
 
         self._context_spin = QSpinBox()
         self._context_spin.setRange(4096, 2000000)
         self._context_spin.setSingleStep(10000)
         self._context_spin.setValue(self._config.provider.context_window)
-        gen_form.addRow("Context Window:", self._context_spin)
+        gen_form.addRow(QCoreApplication.translate("SettingsDialog", "Context Window:"), self._context_spin)
 
         return gen_group
 
     def _build_behavior_group(self) -> QGroupBox:
         """Build the Behavior settings group box."""
-        behavior_group = QGroupBox("Behavior")
+        behavior_group = QGroupBox(QCoreApplication.translate("SettingsDialog", "Behavior"))
         behavior_form = QFormLayout(behavior_group)
 
-        self._auto_context_cb = QCheckBox("Auto-inject binary context into system prompt")
+        self._auto_context_cb = QCheckBox(QCoreApplication.translate("SettingsDialog", "Auto-inject binary context into system prompt"))
         self._auto_context_cb.setChecked(self._config.auto_context)
         behavior_form.addRow(self._auto_context_cb)
 
-        self._auto_save_cb = QCheckBox("Auto-save sessions")
+        self._auto_save_cb = QCheckBox(QCoreApplication.translate("SettingsDialog", "Auto-save sessions"))
         self._auto_save_cb.setChecked(self._config.checkpoint_auto_save)
         behavior_form.addRow(self._auto_save_cb)
 
@@ -409,46 +409,44 @@ class SettingsDialog(QDialog):
         self._explore_turns_spin.setRange(5, 200)
         self._explore_turns_spin.setValue(self._config.exploration_turn_limit)
         self._explore_turns_spin.setToolTip(
-            "Maximum turns the agent spends in the exploration phase before "
-            "forcing a transition (or reporting an error if findings are insufficient)."
+            QCoreApplication.translate("SettingsDialog", "Maximum turns the agent spends in the exploration phase before forcing a transition (or reporting an error if findings are insufficient).")
         )
-        behavior_form.addRow("Exploration turn limit:", self._explore_turns_spin)
+        behavior_form.addRow(QCoreApplication.translate("SettingsDialog", "Exploration turn limit:"), self._explore_turns_spin)
 
         # --- Rate-limit handling ---
         self._max_retries_spin = QSpinBox()
         self._max_retries_spin.setRange(1, 10)
         self._max_retries_spin.setValue(self._config.max_retries)
         self._max_retries_spin.setToolTip(
-            "Number of retry attempts when the API returns a rate-limit or transient error."
+            QCoreApplication.translate("SettingsDialog", "Number of retry attempts when the API returns a rate-limit or transient error.")
         )
-        behavior_form.addRow("API retry attempts:", self._max_retries_spin)
+        behavior_form.addRow(QCoreApplication.translate("SettingsDialog", "API retry attempts:"), self._max_retries_spin)
 
-        self._silent_retry_cb = QCheckBox("Show loading indicator instead of error messages during retries")
+        self._silent_retry_cb = QCheckBox(QCoreApplication.translate("SettingsDialog", "Show loading indicator instead of error messages during retries"))
         self._silent_retry_cb.setChecked(self._config.silent_retry_mode)
         self._silent_retry_cb.setToolTip(
-            "When enabled, rate-limit retries show a subtle text indicator instead of red error messages."
+            QCoreApplication.translate("SettingsDialog", "When enabled, rate-limit retries show a subtle text indicator instead of red error messages.")
         )
         behavior_form.addRow(self._silent_retry_cb)
 
         # --- Context preservation ---
-        self._preserve_context_cb = QCheckBox("Preserve full context (disable tool result truncation)")
+        self._preserve_context_cb = QCheckBox(QCoreApplication.translate("SettingsDialog", "Preserve full context (disable tool result truncation)"))
         self._preserve_context_cb.setChecked(self._config.preserve_context)
         self._preserve_context_cb.setToolTip(
-            "Disables tool result truncation and message trimming. "
-            "Enable for deep RE sessions where losing decompilation context is worse than higher token cost."
+            QCoreApplication.translate("SettingsDialog", "Disables tool result truncation and message trimming. Enable for deep RE sessions where losing decompilation context is worse than higher token cost.")
         )
         behavior_form.addRow(self._preserve_context_cb)
 
         # --- API key encryption ---
         from ..core.crypto import is_available as crypto_available
 
-        self._encrypt_keys_cb = QCheckBox("Encrypt API keys with password")
+        self._encrypt_keys_cb = QCheckBox(QCoreApplication.translate("SettingsDialog", "Encrypt API keys with password"))
         self._encrypt_keys_cb.setChecked(self._config.encrypt_api_keys)
         self._encrypt_keys_cb.setEnabled(crypto_available())
         self._encrypt_keys_cb.setToolTip(
-            "Encrypt all stored API keys with a password.\nYou must enter this password each time Rikugan starts."
+            QCoreApplication.translate("SettingsDialog", "Encrypt all stored API keys with a password.\nYou must enter this password each time Rikugan starts.")
             if crypto_available()
-            else "Requires the 'cryptography' package (pip install cryptography)."
+            else QCoreApplication.translate("SettingsDialog", "Requires the 'cryptography' package (pip install cryptography).")
         )
         behavior_form.addRow(self._encrypt_keys_cb)
 
@@ -542,13 +540,13 @@ class SettingsDialog(QDialog):
 
         # Update placeholder
         if provider == "anthropic":
-            self._api_key_edit.setPlaceholderText("sk-... or leave empty for OAuth auto-detect")
+            self._api_key_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "sk-... or leave empty for OAuth auto-detect"))
         elif provider == "ollama":
-            self._api_key_edit.setPlaceholderText("Not required for local Ollama")
+            self._api_key_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "Not required for local Ollama"))
         elif provider in ("openai_compat",) or is_custom:
-            self._api_key_edit.setPlaceholderText("API key for the endpoint")
+            self._api_key_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "API key for the endpoint"))
         else:
-            self._api_key_edit.setPlaceholderText("API key")
+            self._api_key_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "API key"))
 
         self._update_auth_status()
         self._fetch_models()
@@ -600,7 +598,7 @@ class SettingsDialog(QDialog):
             self._auth_status.setStyleSheet(self._OK_STYLE)
         elif status_type == "error":
             if provider_name == "anthropic":
-                self._auth_status.setText("run claude setup-token to acquire your oauth")
+                self._auth_status.setText(QCoreApplication.translate("SettingsDialog", "run claude setup-token to acquire your oauth"))
                 self._auth_status.setStyleSheet(self._HINT_STYLE)
             else:
                 self._auth_status.setText(label)
@@ -620,7 +618,7 @@ class SettingsDialog(QDialog):
         if not key and self._resolved_token:
             key = self._resolved_token
 
-        self._model_status.setText("Fetching...")
+        self._model_status.setText(QCoreApplication.translate("SettingsDialog", "Fetching..."))
         self._fetch_btn.setEnabled(False)
         self._fetcher.fetch(provider, key, base)
 
@@ -650,10 +648,10 @@ class SettingsDialog(QDialog):
         self._model_restore_hint = ""
 
         if models:
-            self._model_status.setText(f"{len(models)} models")
+            self._model_status.setText(QCoreApplication.translate("SettingsDialog", "{count} models").format(count=len(models)))
             self._model_status.setStyleSheet(maybe_host_stylesheet("color: #4ec9b0; font-size: 10px;"))
         else:
-            self._model_status.setText("Type model name manually")
+            self._model_status.setText(QCoreApplication.translate("SettingsDialog", "Type model name manually"))
             self._model_status.setStyleSheet(maybe_host_stylesheet("color: #808080; font-size: 10px;"))
 
         # Auto-fill generation defaults based on selected model
@@ -661,7 +659,7 @@ class SettingsDialog(QDialog):
 
     def _on_fetch_error(self, error: str) -> None:
         self._fetch_btn.setEnabled(True)
-        self._model_status.setText(error)
+        self._model_status.setText(error)  # error is already a dynamic string from exception
         self._model_status.setStyleSheet(maybe_host_stylesheet("color: #f44747; font-size: 10px;"))
         self._model_restore_hint = ""
 
@@ -753,14 +751,14 @@ class SettingsDialog(QDialog):
 
         pw_edit = QLineEdit()
         pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        pw_edit.setPlaceholderText("Password")
+        pw_edit.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "Password"))
         layout.addWidget(pw_edit)
 
         pw_confirm: QLineEdit | None = None
         if confirm:
             pw_confirm = QLineEdit()
             pw_confirm.setEchoMode(QLineEdit.EchoMode.Password)
-            pw_confirm.setPlaceholderText("Confirm password")
+            pw_confirm.setPlaceholderText(QCoreApplication.translate("SettingsDialog", "Confirm password"))
             layout.addWidget(pw_confirm)
 
         from .qt_compat import QDialogButtonBox, qt_flags, qt_run
@@ -780,10 +778,10 @@ class SettingsDialog(QDialog):
 
         password = pw_edit.text()
         if not password:
-            QMessageBox.warning(self, title, "Password cannot be empty.")
+            QMessageBox.warning(self, title, QCoreApplication.translate("SettingsDialog", "Password cannot be empty."))
             return ""
         if confirm and pw_confirm and pw_confirm.text() != password:
-            QMessageBox.warning(self, title, "Passwords do not match.")
+            QMessageBox.warning(self, title, QCoreApplication.translate("SettingsDialog", "Passwords do not match."))
             return ""
         return password
 
@@ -827,15 +825,15 @@ class SettingsDialog(QDialog):
         if wants_encrypt:
             if self._config.encrypt_api_keys:
                 # Already encrypted — need current password to re-encrypt
-                password = self._prompt_password("Enter encryption password", confirm=False)
+                password = self._prompt_password(QCoreApplication.translate("SettingsDialog", "Enter encryption password"), confirm=False)
             else:
                 # Newly enabling — prompt for new password with confirmation
-                password = self._prompt_password("Set encryption password", confirm=True)
+                password = self._prompt_password(QCoreApplication.translate("SettingsDialog", "Set encryption password"), confirm=True)
             if not password:
                 return  # user cancelled
         elif self._config.encrypt_api_keys:
             # Disabling encryption — need current password to verify ownership
-            password = self._prompt_password("Enter current password to disable encryption", confirm=False)
+            password = self._prompt_password(QCoreApplication.translate("SettingsDialog", "Enter current password to disable encryption"), confirm=False)
             if not password:
                 return
             # Verify the password is correct before disabling
@@ -843,7 +841,7 @@ class SettingsDialog(QDialog):
                 if not self._config.decrypt_stored_keys(password):
                     from .qt_compat import QMessageBox
 
-                    QMessageBox.warning(self, "Wrong Password", "Incorrect password.")
+                    QMessageBox.warning(self, QCoreApplication.translate("SettingsDialog", "Wrong Password"), QCoreApplication.translate("SettingsDialog", "Incorrect password."))
                     return
             password = ""  # save unencrypted
 

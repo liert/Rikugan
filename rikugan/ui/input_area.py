@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .qt_compat import (
+    QCoreApplication,
     QEvent,
     QFrame,
     QLabel,
@@ -102,7 +103,7 @@ class InputArea(QPlainTextEdit):
     def __init__(self, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("input_area")
-        self.setPlaceholderText("Ask about this binary... (/ for skills, /modify to patch)")
+        self.setPlaceholderText(QCoreApplication.translate("InputArea", "Ask about this binary... (/ for skills, /modify to patch)"))
         self.setMaximumHeight(100)
         self.setMinimumHeight(40)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -173,9 +174,9 @@ class InputArea(QPlainTextEdit):
         self._enabled = enabled
         self.setReadOnly(not enabled)
         if enabled:
-            self.setPlaceholderText("Ask about this binary... (/ for skills, /modify to patch)")
+            self.setPlaceholderText(QCoreApplication.translate("InputArea", "Ask about this binary... (/ for skills, /modify to patch)"))
         else:
-            self.setPlaceholderText("Rikugan is thinking...")
+            self.setPlaceholderText(QCoreApplication.translate("InputArea", "Rikugan is thinking..."))
 
     def _apply_theme(self) -> None:
         """Apply host-aware styling to the text editor."""
