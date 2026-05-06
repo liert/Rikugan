@@ -1,10 +1,11 @@
-"""Shared prompt-generating action handlers for IDA and Binary Ninja.
+"""
+IDA 和 Binary Ninja 共享的提示词生成动作处理器。
 
-Each handler takes a context dict with keys: ea, func_ea, func_name, selected_text.
-Returns the prompt text to place in the input area.
+每个处理器接收一个上下文字典，包含：ea、func_ea、func_name、selected_text。
+返回要放入输入区域的提示文本。
 
-Host-specific actions (IDA's microcode optimizer, BN's smart-patch) live in
-their respective ``<host>/ui/actions.py`` modules.
+宿主动作（IDA 的微码优化器、BN 的 smart-patch）位于
+各自的 ``<host>/ui/actions.py`` 模块中。
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from typing import Any
 
 
 def _func_label(ctx: dict[str, Any]) -> tuple[str, int]:
-    """Return (display_name, effective_address) from context."""
+    """从上下文中返回 (显示名称, 有效地址)。"""
     name = ctx["func_name"] or f"sub_{ctx['ea']:x}"
     ea = ctx["func_ea"] or ctx["ea"]
     return name, ea
@@ -26,31 +27,31 @@ def handle_send_to(ctx: dict[str, Any]) -> str:
     name = ctx["func_name"]
     ea = ctx["ea"]
     if name:
-        return f"Analyze the function {name} at 0x{ea:x}"
-    return f"Analyze the code at 0x{ea:x}"
+        return f"分析位于 0x{ea:x} 的函数 {name}"
+    return f"分析位于 0x{ea:x} 的代码"
 
 
 def handle_explain(ctx: dict[str, Any]) -> str:
     name, ea = _func_label(ctx)
-    return f"Explain the function {name} at 0x{ea:x}. Decompile it and provide a detailed analysis."
+    return f"解释位于 0x{ea:x} 的函数 {name}。对其进行反编译并提供详细分析。"
 
 
 def handle_rename(ctx: dict[str, Any]) -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Analyze the function {name} at 0x{ea:x}. "
-        "Based on its behavior, suggest better names for the function "
-        "and its local variables. Apply the renames."
+        f"分析位于 0x{ea:x} 的函数 {name}。"
+        "根据其行为，为该函数及其局部变量建议更好的名称，"
+        "并应用重命名。"
     )
 
 
 def handle_deobfuscate(ctx: dict[str, Any], *, optimizer_term: str = "IL") -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Deobfuscate the function {name} at 0x{ea:x}. "
-        "Identify obfuscation patterns (opaque predicates, junk code, "
-        "control-flow flattening, encrypted strings) and explain them. "
-        f"If possible, apply {optimizer_term} optimizations to clean the output."
+        f"对位于 0x{ea:x} 的函数 {name} 进行反混淆处理。"
+        "识别混淆模式（不透明谓词、垃圾代码、"
+        "控制流平坦化、加密字符串）并解释它们。"
+        f"如有可能，应用 {optimizer_term} 优化以清理输出。"
     )
 
 
@@ -67,35 +68,35 @@ def handle_vuln_audit(ctx: dict[str, Any]) -> str:
 def handle_suggest_types(ctx: dict[str, Any]) -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Analyze the function {name} at 0x{ea:x} and infer types. "
-        "Examine pointer dereference patterns to suggest structs, "
-        "identify enum-like constants, and propose proper parameter types. "
-        "Apply the type changes."
+        f"分析位于 0x{ea:x} 的函数 {name} 并推断类型。"
+        "检查指针解引用模式以建议结构体，"
+        "识别枚举类常量，并提出合适的参数类型。"
+        "应用这些类型修改。"
     )
 
 
 def handle_annotate(ctx: dict[str, Any]) -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Annotate the function {name} at 0x{ea:x} with comments. "
-        "Add a function-level comment summarizing its purpose, and "
-        "add inline comments to key basic blocks explaining the logic."
+        f"为位于 0x{ea:x} 的函数 {name} 添加注释。"
+        "添加函数级注释总结其用途，"
+        "并在关键基本块中添加内联注释解释其逻辑。"
     )
 
 
 def handle_clean(ctx: dict[str, Any], *, ir_term: str = "IL") -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Clean the {ir_term} for {name} at 0x{ea:x}. "
-        f"Read the {ir_term}, identify junk or obfuscated instructions, "
-        "NOP or patch them if needed, then redecompile to verify."
+        f"清理位于 0x{ea:x} 的函数 {name} 的 {ir_term}。"
+        f"读取 {ir_term}，识别垃圾或混淆指令，"
+        "必要时用 NOP 填充或修补，然后重新反编译验证。"
     )
 
 
 def handle_xref_analysis(ctx: dict[str, Any]) -> str:
     name, ea = _func_label(ctx)
     return (
-        f"Perform a deep cross-reference analysis on {name} at 0x{ea:x}. "
-        "Trace all callers and callees, identify data references, "
-        "and map out the call graph around this function."
+        f"对位于 0x{ea:x} 的函数 {name} 执行深度交叉引用分析。"
+        "追踪所有调用者与被调用者，识别数据引用，"
+        "并绘制该函数周围的调用关系图。"
     )

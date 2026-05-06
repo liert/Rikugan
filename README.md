@@ -1,104 +1,116 @@
-# Rikugan (六眼)
+# Rikugan（六眼）
 
-A reverse-engineering agent for **IDA Pro** and **Binary Ninja** that integrates a multi-provider LLM directly into your analysis UI. This project was vibecoded together with my friend, Claude Code.
+<p align="center">
+  <i>一个面向 IDA Pro 和 Binary Ninja 的逆向工程智能体。</i><br>
+  <i>A reverse-engineering agent for IDA Pro and Binary Ninja.</i>
+</p>
 
-![alt text](assets/binja_showcase.png)
+<p align="center">
+  <a href="README.md"><b>中文</b></a> ｜
+  <a href="docs/README.en.md"><b>English</b></a>
+</p>
 
-![alt text](assets/ida_showcase.png)
+<p align="center">
+  <a href="https://rikugan.reversing.codes/docs.html">📖 文档 / Documentation</a> ｜
+  <a href="https://rikugan.reversing.codes/ARCHITECTURE.html">🏗️ 架构 / Architecture</a> ｜
+  <a href="https://github.com/buzzer-re/Rikugan/issues">🐛 Issues</a>
+</p>
 
-[Documentation](https://rikugan.reversing.codes/docs.html) | [Architecture](https://rikugan.reversing.codes/ARCHITECTURE.html) | [Issues](https://github.com/buzzer-re/Rikugan/issues)
+![alt text](../assets/binja_showcase.png)
 
-## Install
+![alt text](../assets/ida_showcase.png)
 
-Auto-detects IDA Pro, Binary Ninja, or both.
+[文档](https://rikugan.reversing.codes/docs.html) | [架构](https://rikugan.reversing.codes/ARCHITECTURE.html) | [Issues](https://github.com/buzzer-re/Rikugan/issues)
 
-**Linux / macOS:**
+## 安装
+
+自动检测 IDA Pro、Binary Ninja 或两者同时安装。
+
+**Linux / macOS：**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/buzzer-re/Rikugan/main/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+**Windows（PowerShell）：**
 ```powershell
 irm https://raw.githubusercontent.com/buzzer-re/Rikugan/main/install.ps1 | iex
 ```
 
-For host-specific install, manual setup, and configuration, see the [docs](https://rikugan.reversing.codes/docs.html).
+针对特定主机安装、手动设置及配置，请参阅[文档](https://rikugan.reversing.codes/docs.html)。
 
-## Is this another MCP client?
+## 这是又一个 MCP 客户端吗？
 
-No, Rikugan is an ***agent*** built to live inside your RE host. It does not consume an MCP server to interact with the host database; it has its own agentic loop, context management, role prompt ([source](rikugan/agent/system_prompt.py)), and an in-process tool orchestration layer.
+不，Rikugan 是一个构建在逆向宿主内部的 ***智能体***。它不依赖 MCP 服务器来与宿主数据库交互，而是拥有自己的智能体循环、上下文管理、角色提示（[源码](../rikugan/agent/system_prompt.py)），以及进程内工具编排层。
 
-The agent loop is a generator-based turn cycle: each user message kicks off a stream→execute→repeat pipeline where the LLM response is streamed token-by-token and tool calls are intercepted and dispatched. It supports automatic error recovery, mid-run user questions, plan mode for multi-step workflows, and message queuing — all without leaving the disassembler.
+智能体循环基于生成器的轮次循环：每条用户消息启动一个流式输出→执行→重复的流水线，LLM 响应逐 token 流式返回，工具调用被拦截并分发。它支持自动错误恢复、运行中用户提问、多步骤工作流的计划模式，以及消息队列——所有这些无需离开反汇编器即可完成。
 
-The agent really ***lives*** and ***breathes*** reversing.
+这个智能体真正 ***活跃*** 在逆向分析中。
 
-- No need to switch to an external MCP client
-- Assistant-first, not designed to do your job (unless you ask it to)
-- Extensible to many LLM providers and local installations (Ollama)
-- Quick to enable — just hit Ctrl+Shift+I and the chat will appear
+- 无需切换到外部 MCP 客户端
+- 助手优先，不会替你完成工作（除非你要求）
+- 可扩展至多种 LLM 供应商和本地部署（Ollama）
+- 快速启用——只需按 Ctrl+Shift+I 即可打开聊天窗口
 
-## Features
+## 功能特性
 
-**60+ tools** covering navigation, decompiler, disassembly, cross-references, strings, annotations, types, scripting, and host-specific IL/microcode manipulation. The agent always asks permission before running scripts and will never execute the target binary. Full tool reference in the [docs](https://rikugan.reversing.codes/docs.html).
+**60+ 工具**，涵盖导航、反编译器、反汇编、交叉引用、字符串、注释、类型、脚本以及宿主编译器中间语言/微码操作。智能体在执行脚本前始终请求许可，绝不会执行目标二进制文件。完整工具参考请见[文档](https://rikugan.reversing.codes/docs.html)。
 
-**Exploration** — Inspired by how code agents work, but applied to binaries. The orchestrator maps the binary (imports, exports, strings, key functions), then spawns isolated subagents to analyze in parallel. Each reports back, and the orchestrator synthesizes a complete picture.
+**探索**——灵感来源于代码智能体的工作方式，但应用于二进制文件。编排器映射二进制文件结构（导入、导出、字符串、关键函数），然后生成独立的子智能体并行分析。每个子智能体汇报结果，编排器综合形成完整分析。
 
-|![alt text](assets/subagents_example_3.png)|
+|![alt text](../assets/subagents_example_3.png)|
 |:--:|
-|Orchestrator spawning subagents in parallel|
+|编排器并行派生子智能体|
 
-**Natural Language Patches** (Experimental) — `/modify` lets you describe what you want changed in plain English. Rikugan explores the binary, builds context, and applies the patches.
+**自然语言补丁**（实验性功能）——`/modify` 让你用自然语言描述所需的修改。Rikugan 会探索二进制文件，构建上下文，然后应用补丁。
 
-|![alt text](assets/maze_solve.gif)|
+|![alt text](../assets/maze_solve.gif)|
 |:--:|
-|`/modify make this maze game easy, let me pass through walls`|
+|`/modify 让这个迷宫游戏变简单，让我可以穿墙`|
 
-**Deobfuscation** (Experimental, Binary Ninja) — The `/deobfuscation` skill activates plan mode to recognize and remove control flow flattening, opaque predicates, MBA expressions, and junk code using IL read/write primitives.
+**反混淆**（实验性功能，Binary Ninja）——`/deobfuscation` 技能启动计划模式，识别并移除控制流平坦化、不透明谓词、MBA 表达式和垃圾代码，使用编译器中间语言读写原语实现。
 
-|![](assets/cff_remove_example.gif)|
+|![](../assets/cff_remove_example.gif)|
 |:--:|
-|~3x speed of the workflow, original process took ~4:30 min|
+|工作流速度提升约 3 倍，原始流程约 4 分 30 秒|
 
-**Memory** — Findings are saved to `RIKUGAN.md` next to your database, persisting across sessions.
+**记忆**——分析结果保存在数据库旁边的 `RIKUGAN.md` 文件中，跨会话持久化。
 
-**Skills & MCP** — 12 built-in skills, custom skill support, and MCP server integration. Reuse skills and MCP servers from Claude Code and Codex.
+**技能 & MCP**——内置 12 项技能，支持自定义技能和 MCP 服务器集成。可重用在 Claude Code 和 Codex 中使用的技能和 MCP 服务器。
 
-### Profiles
+### 配置文件
 
-Profiles let you customize the agent to fit your analysis needs. They give you granular control over which data the LLM can read, restrict which tools it can use, and let you define custom rules to filter data.
+配置文件让你能够根据分析需求自定义智能体。你可以精细控制 LLM 可读取的数据、限制其可使用的工具，并定义自定义规则来过滤数据。
 
-![alt text](assets/profile.png)
+![alt text](../assets/profile.png)
 
-## Recommended Providers
+## 推荐供应商
 
-| Provider | Notes |
+| 供应商 | 说明 |
 |----------|-------|
-| **Claude Opus 4.6** | Best overall. Recommend Claude Pro/Max plan with OAuth over API. |
-| **Claude Sonnet 4.6** | Strong at lower cost. Both Anthropic models use prompt caching. |
-| **MiniMax M2.5 / Highspeed** | On par with Opus in local tests. Generous limits, low cost. |
-| **Gemini 2.5 / 3 / 3.1 Pro** | Solid results. Hallucinates more than Anthropic/MiniMax. |
-| **Kimi 2.5** | Strong coding, but lacks rigor for complex RE tasks. |
-| **LLAMA 70B / GPT 120B OSS** | Interesting but not production-ready for RE. |
+| **Claude Opus 4.6** | 整体最佳。推荐使用 Claude Pro/Max 计划的 OAuth 方式，而非 API 密钥。 |
+| **Claude Sonnet 4.6** | 性价比高。两款 Anthropic 模型均支持提示缓存。 |
+| **MiniMax M2.5 / Highspeed** | 本地测试中与 Opus 相当。限制宽松，成本低廉。 |
+| **Gemini 2.5 / 3 / 3.1 Pro** | 效果不错，但幻觉率高于 Anthropic/MiniMax。 |
+| **Kimi 2.5** | 编码能力强，但在复杂逆向工程任务中尚不够严谨。 |
+| **LLAMA 70B / GPT 120B OSS** | 有趣但尚未达到逆向工程的生产就绪水平。 |
 
-Also supports any OpenAI-compatible endpoint and Ollama for local models.
+同时支持任何兼容 OpenAI 的端点和 Ollama 本地模型。
 
-## Requirements
+## 系统要求
 
-- IDA Pro 9.0+ with Hex-Rays decompiler or Binary Ninja (UI mode)
+- IDA Pro 9.0+（含 Hex-Rays 反编译器）或 Binary Ninja（UI 模式）
 - Python 3.10+
-- At least one LLM provider
-- Windows, macOS, or Linux
+- 至少一个 LLM 供应商
+- Windows、macOS 或 Linux
 
-> **IDA Pro + Python >= 3.14:** Shiboken has a known UAF bug. Rikugan includes a workaround, but Python 3.10 is still the safest choice. See the [upstream report](https://community.hex-rays.com/t/ida-9-3-b1-macos-arm64-uaf-crash/646).
+> **IDA Pro + Python >= 3.14：** Shiboken 存在已知的 UAF 漏洞。Rikugan 包含一个变通方案，但 Python 3.10 仍然是最安全的选择。参见[上游报告](https://community.hex-rays.com/t/ida-9-3-b1-macos-arm64-uaf-crash/646)。
 
-## Conclusion
+## 结语
 
-If you'd asked me last year what I thought about AI doing reverse engineering, I'd probably have said something like "Nah, impossible — it hallucinates, and reverse engineering is not something as simple as writing code." But this year I completely changed my mind when I saw what was achievable. AI is not the ChatGPT from 2023 anymore; it's something entirely different.
+如果你去年问我如何看待 AI 进行逆向工程，我可能会说"不可能——AI 会产生幻觉，而逆向工程不像写代码那么简单"。但今年，当我看到实际能达成的成果时，我彻底改变了想法。AI 已不再是 2023 年的 ChatGPT，它已经完全不同了。
 
-For that reason, I decided to invest this year in researching this topic. It's amazing what we can build with agentic coding — it's surreal how quickly I'm learning topics that I simply "didn't have time" to study before.
+正因如此，我决定今年投入时间研究这个方向。用智能体编程能做的事情令人惊叹——学习那些以前"没时间"学习的课题，速度快得不真实。
 
-Rikugan is just one of many projects I've built in the last three months. The first version was built in a single night. Within two days it already supported both IDA and Binary Ninja. Within three days, it was essentially what you see here, with only minor tweaks since.
+Rikugan 只是我过去三个月构建的众多项目之一。第一个版本在一夜之间完成，两天内就同时支持了 IDA 和 Binary Ninja，三天后基本就是你现在看到的样子，此后只做了小幅调整。
 
-This is a work in progress with many areas for improvement. I took care to ensure this wouldn't be another AI slop project, but I'm certain there is still room to grow. I hope you use it for good. If you find bugs, have suggestions, or want quality-of-life improvements, please open an issue.
-
-That's all — thanks.
+这仍是一个持续改进的项目，还有很多方面有待提升。我尽力确保它不会成为又一个 AI 粗制滥造的项目，但我知道还有很大的成长空间。希望你用它做有意义的事。如果发现 bug、有建议或想要提升生活质量的功能，欢迎提出 issue。

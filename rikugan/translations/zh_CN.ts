@@ -9,7 +9,7 @@
     </message>
     <message>
         <source>Explain this</source>
-        <translation>解释此内容</translation>
+        <translation>解释此函数</translation>
     </message>
     <message>
         <source>Rename with Rikugan</source>
@@ -21,7 +21,7 @@
     </message>
     <message>
         <source>Find vulnerabilities</source>
-        <translation>寻找漏洞</translation>
+        <translation>查找漏洞</translation>
     </message>
     <message>
         <source>Suggest types</source>
@@ -33,7 +33,7 @@
     </message>
     <message>
         <source>Clean microcode</source>
-        <translation>清理微代码</translation>
+        <translation>清理微码</translation>
     </message>
     <message>
         <source>Xref analysis</source>
@@ -41,12 +41,16 @@
     </message>
     <message>
         <source>Send to Bulk Rename</source>
-        <translation>批量重命名</translation>
+        <translation>发送到批量重命名</translation>
+    </message>
+    <message>
+        <source>Open Tools</source>
+        <translation>打开工具</translation>
     </message>
 
     <message>
         <source>Send selection or address to Rikugan input</source>
-        <translation>将选中的内容或地址发送到 Rikugan 输入</translation>
+        <translation>将选中内容或地址发送至 Rikugan 输入区</translation>
     </message>
     <message>
         <source>Explain the current function with Rikugan</source>
@@ -74,11 +78,19 @@
     </message>
     <message>
         <source>Clean the microcode for the current function</source>
-        <translation>清理当前函数的微代码 (Microcode)</translation>
+        <translation>清理当前函数的微码</translation>
     </message>
     <message>
         <source>Deep cross-reference analysis on the current function</source>
-        <translation>对当前函数进行深度的交叉引用分析</translation>
+        <translation>对当前函数进行深度交叉引用分析</translation>
+    </message>
+    <message>
+        <source>Open the Rikugan Tools panel</source>
+        <translation>打开 Rikugan 工具面板</translation>
+    </message>
+    <message>
+        <source>Send function to Rikugan Bulk Renamer</source>
+        <translation>将函数发送至 Rikugan 批量重命名器</translation>
     </message>
 </context>
 </TS>

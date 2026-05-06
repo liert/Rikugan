@@ -1,6 +1,7 @@
-"""IDA UI hooks and context menu integration.
+"""
+IDA UI 钩子与上下文菜单集成。
 
-Data-driven table of 9 context-menu actions under Rikugan/.
+基于数据驱动的 Rikugan/ 下 9 个上下文菜单动作表。
 """
 
 from __future__ import annotations
@@ -35,9 +36,9 @@ except ImportError:
 
 
 def _get_context() -> dict[str, Any]:
-    """Extract context from the current IDA view.
+    """从当前 IDA 视图中提取上下文。
 
-    Returns dict with keys: ea, func_ea, func_name, selected_text.
+    返回字典，包含键：ea、func_ea、func_name、selected_text。
     """
     ea = idc.get_screen_ea()
     ctx: dict[str, Any] = {
@@ -68,7 +69,7 @@ if _HAS_IDA:
     # ------------------------------------------------------------------
 
     class _RikuganAction(idaapi.action_handler_t):
-        """Generic context-menu action backed by a handler callback."""
+        """通用的上下文菜单动作，由处理回调支持。"""
 
         def __init__(
             self,
@@ -99,7 +100,7 @@ if _HAS_IDA:
             return idaapi.AST_ENABLE_ALWAYS
 
     class _OpenToolsAction(idaapi.action_handler_t):
-        """Open the Rikugan Tools panel."""
+        """打开 Rikugan 工具面板。"""
 
         def __init__(self, panel_getter: Callable[[], Any]):
             super().__init__()
@@ -116,7 +117,7 @@ if _HAS_IDA:
             return idaapi.AST_ENABLE_ALWAYS
 
     class _SendToBulkRenameAction(idaapi.action_handler_t):
-        """Send the current function to the Bulk Renamer."""
+        """将当前函数发送到批量重命名器。"""
 
         def __init__(self, panel_getter: Callable[[], Any]):
             super().__init__()
@@ -255,7 +256,7 @@ if _HAS_IDA:
     # ------------------------------------------------------------------
 
     class RikuganUIHooks(idaapi.UI_Hooks):
-        """UI hooks for adding Rikugan to context menus."""
+        """用于将 Rikugan 添加到上下文菜单的 UI 钩子。"""
 
         def __init__(self, panel_getter: Callable[[], Any]):
             super().__init__()
@@ -295,10 +296,10 @@ if _HAS_IDA:
             idaapi.register_action(
                 idaapi.action_desc_t(
                     "rikugan:open_tools",
-                    "Open Tools",
+                    QCoreApplication.translate("MainWindow", "Open Tools"),
                     _OpenToolsAction(self._get_panel),
                     "",
-                    "Open the Rikugan Tools panel",
+                    QCoreApplication.translate("MainWindow", "Open the Rikugan Tools panel"),
                 )
             )
             idaapi.attach_action_to_menu(
@@ -314,7 +315,7 @@ if _HAS_IDA:
                     QCoreApplication.translate("MainWindow", "Send to Bulk Rename"),
                     _SendToBulkRenameAction(self._get_panel),
                     "",
-                    "Send function to Rikugan Bulk Renamer",
+                    QCoreApplication.translate("MainWindow", "Send function to Rikugan Bulk Renamer"),
                 )
             )
 
@@ -336,7 +337,7 @@ if _HAS_IDA:
                 idaapi.attach_action_to_popup(widget, popup, "rikugan:open_tools", "Rikugan/")
 
         def database_inited(self, is_new_database: bool, idc_script: str) -> None:
-            """Called when a database is opened or created."""
+            """当数据库被打开或创建时调用。"""
             panel = self._get_panel()
             if panel is None:
                 return
@@ -361,7 +362,7 @@ if _HAS_IDA:
 else:
 
     class RikuganUIHooks:
-        """Stub when IDA is not available."""
+        """IDA 不可用时的存根类。"""
 
         def __init__(self, *args, **kwargs):
             self._panel_getter = kwargs.get("panel_getter")
